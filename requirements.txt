@@ -1,0 +1,10 @@
+# Dependencias principales
+requests>=2.31.0
+beautifulsoup4>=4.12.2
+python-telegram-bot>=20.7
+schedule>=1.2.1
+python-dotenv>=1.0.0
+pytz>=2023.3
+
+# Dependencias secundarias
+html5lib>=1.1 

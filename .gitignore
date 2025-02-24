@@ -1,0 +1,43 @@
+# Archivos sensibles
+.env
+.env.*
+!.env.example
+
+# Archivos de logs
+logs/
+*.log
+bot_output.log
+
+# Archivos de respuesta
+responses/
+*.txt
+
+# Entorno virtual
+venv/
+env/
+ENV/
+
+# Archivos de proceso
+*.pid
+bot.pid
+
+# Caché de Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Archivos de distribución
+dist/
+build/
+*.egg-info/
+
+# Archivos de IDE y editores
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store 
