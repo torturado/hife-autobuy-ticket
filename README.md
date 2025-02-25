@@ -37,6 +37,9 @@ Para cambiar el idioma de tu cuenta HIFE:
 3. Selecciona "English"
 4. Verifica que la URL de navegación ha cambiado a incluir "/en/" y que la interfaz está en inglés
 
+![image](https://github.com/user-attachments/assets/b3613df8-aa89-4a2a-8097-c6e136b248de)
+
+
 El bot NO funcionará correctamente si tu cuenta está configurada en español o catalán.
 
 ## Instalación
@@ -73,6 +76,9 @@ pip install -r requirements.txt
 3. Sigue las instrucciones para crear un nuevo bot
 4. Guarda el token que te proporciona BotFather
 5. Envía un mensaje a tu nuevo bot y luego habla con @userinfobot para obtener tu ID de usuario
+
+![image](https://github.com/user-attachments/assets/3866d58c-78ee-4076-8033-750b1d606dcf)
+
 
 ### 5. Ejecutar el asistente de configuración
 
