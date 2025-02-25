@@ -2040,7 +2040,7 @@ def check_session():
         return init_session()
     return True
 
-def handle_response(response, expected_status=200):
+def handle_http_response(response, expected_status=200):
     """Maneja las respuestas HTTP"""
     if response.status_code != expected_status:
         logger.error(f"Error en petición: {response.status_code}")
@@ -2062,8 +2062,8 @@ async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = (
         "🤖 *Comandos disponibles:*\n\n"
         "/start - Inicia la conversación con el bot\n"
-        "/si_ida - Compra inmediatamente un billete de ida para hoy\n"
-        "/si_vuelta - Compra inmediatamente un billete de vuelta para hoy\n"
+        "/si\\_ida - Compra inmediatamente un billete de ida para hoy\n"
+        "/si\\_vuelta - Compra inmediatamente un billete de vuelta para hoy\n"
         "/horarios - Muestra los horarios configurados\n"
         "/estado - Comprueba el estado de la conexión con HIFE\n"
         "/ayuda - Muestra este mensaje de ayuda\n\n"
