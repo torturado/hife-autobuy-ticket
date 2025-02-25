@@ -1,3 +1,5 @@
+# ⚠️⚠️ BOT EN PRUEBAS
+
 # HIFE Bot Personalizable
 
 Bot para compra automática de billetes en HIFE.es
