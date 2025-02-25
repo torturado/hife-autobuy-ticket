@@ -905,14 +905,6 @@ def refresh_csrf():
     logger.error("Se agotaron todos los intentos de refrescar tokens")
     return False
 
-def check_session():
-    """Verifica si la sesión sigue activa"""
-    r = session.get(f"{BASE_URL}/en/my-private-area")
-    if "Your current balance in Bono Virtual" not in r.text:
-        logger.warning("Sesión expirada, renovando...")
-        return init_session()
-    return True
-
 def get_available_bonuses(html):
     """Extrae los bonos disponibles del HTML de la página de pasajeros."""
     soup = BeautifulSoup(html, 'html.parser')
@@ -1504,18 +1496,6 @@ def purchase_ticket(trip_type="ida", date_str=None, going_date=None):
     logger.error("Se agotaron todos los intentos de compra")
     return False
 
-def get_return_time():
-    """Obtiene la hora del viaje de vuelta según el día."""
-    now = datetime.now(pytz.timezone('Europe/Madrid'))
-    weekday = now.strftime('%A').lower()
-    
-    # Buscar horario específico para el día
-    if weekday in HORARIOS['vuelta']:
-        return HORARIOS['vuelta'][weekday]['hora']
-    
-    # Si no hay específico, usar default (no debería ocurrir)
-    return HORARIOS['vuelta'].get('default', {}).get('hora', '')
-
 def calculate_notification_time(trip_time, minutes_before=75):
     """Calcula la hora de notificación basada en el tiempo de viaje."""
     hour, minute = map(int, trip_time.split(':'))
@@ -2031,27 +2011,6 @@ def refresh_csrf():
             
     logger.error("Se agotaron todos los intentos de refrescar tokens")
     return False
-
-def check_session():
-    """Verifica si la sesión sigue activa"""
-    r = session.get(f"{BASE_URL}/en/my-private-area")
-    if "Your current balance in Bono Virtual" not in r.text:
-        logger.warning("Sesión expirada, renovando...")
-        return init_session()
-    return True
-
-def handle_http_response(response, expected_status=200):
-    """Maneja las respuestas HTTP"""
-    if response.status_code != expected_status:
-        logger.error(f"Error en petición: {response.status_code}")
-        logger.error(f"Respuesta: {response.text}")
-        if response.status_code == 419:  # CSRF token mismatch
-            refresh_csrf()
-            return False
-        elif response.status_code in [401, 403]:
-            init_session()
-            return False
-    return True
 
 # Añadir nuevas funciones para comandos
 async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
