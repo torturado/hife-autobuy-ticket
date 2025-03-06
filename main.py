@@ -717,51 +717,7 @@ def verify_session():
         logger.exception("Error inesperado al verificar sesión")
         return False
         
-def verify_purchase(trip_type, date_str):
-    """Verifica que el billete existe en la cartera."""
-    try:
-        logger.info("Verificando billete en cartera...")
-        r = session.get(f"{BASE_URL}/en/tickets-management")
-        logger.info(f"Status de tickets-management: {r.status_code}")
-        
-        if r.status_code != 200:
-            logger.error("Error al verificar billete")
-            return False
-            
-        soup = BeautifulSoup(r.text, 'html.parser')
-        
-        # Buscar el localizador
-        locator_div = soup.find('div', class_='locator_info')
-        if locator_div:
-            locator = locator_div.text.strip().split(':')[-1].strip()
-            logger.info(f"Localizador encontrado: {locator}")
-            
-        # Buscar el número de billete
-        ticket_number = soup.find('div', class_='ticket-number')
-        if ticket_number:
-            ticket_id = ticket_number.find('strong').text.strip()
-            logger.info(f"Número de billete: {ticket_id}")
-            
-        # Buscar la fecha y hora
-        trip_date = soup.find('div', class_='trip_date_go')
-        trip_times = soup.find_all('div', class_='trip_time')
-        if trip_date and len(trip_times) >= 2:
-            fecha = trip_date.text.strip()
-            hora_salida = trip_times[0].text.strip()
-            hora_llegada = trip_times[1].text.strip()
-            logger.info(f"Fecha: {fecha}")
-            logger.info(f"Horario: {hora_salida} - {hora_llegada}")
-            
-            if date_str in fecha:
-                logger.info(f"Billete verificado para fecha {date_str}")
-                return True
-                
-        logger.error(f"No se encontró billete para fecha {date_str}")
-        return False
-        
-    except Exception as e:
-        logger.exception("Error al verificar billete")
-        return False
+
 
 def refresh_csrf():
     """Actualiza el token CSRF y las cookies de sesión con reintentos.
@@ -870,7 +826,7 @@ def refresh_csrf():
             
             # 5. Verificar que la sesión está activa
             r = session.get(
-                f"{BASE_URL}/mi-area-privada",
+                f"{BASE_URL}/en/my-private-area",
                 headers=headers,
                 timeout=10,
                 allow_redirects=False
@@ -1019,7 +975,7 @@ def purchase_ticket(trip_type="ida", date_str=None, going_date=None):
                 'filter_child_without_seat': '0'
             }
 
-            rutas_url = f"{BASE_URL}/rutas?" + "&".join([f"{k}={v}" for k, v in rutas_params.items()])
+            rutas_url = f"{BASE_URL}/en/routes?" + "&".join([f"{k}={v}" for k, v in rutas_params.items()])
             
             r = session.get(
                 rutas_url,
@@ -1042,7 +998,7 @@ def purchase_ticket(trip_type="ida", date_str=None, going_date=None):
             csrf_token = csrf_meta['content']
             
             # Verificar estado de la sesión antes de hacer la reserva
-            session_check = session.get(f"{BASE_URL}/mi-area-privada", allow_redirects=False)
+            session_check = session.get(f"{BASE_URL}/en/my-private-area", allow_redirects=False)
             if session_check.status_code in [301, 302, 401, 403] or '/login' in session_check.headers.get('Location', ''):
                 logger.warning("Sesión inválida antes de hacer la reserva, intentando renovar...")
                 if not init_session():
@@ -1051,7 +1007,7 @@ def purchase_ticket(trip_type="ida", date_str=None, going_date=None):
                     time.sleep(5)
                     continue
                 # Obtener nuevo CSRF token después de renovar sesión
-                r = session.get(f"{BASE_URL}/rutas")
+                r = session.get(f"{BASE_URL}/en/routes")
                 if r.status_code != 200:
                     logger.error("Error al obtener nuevo CSRF token")
                     retry_count += 1
@@ -1133,7 +1089,7 @@ def purchase_ticket(trip_type="ida", date_str=None, going_date=None):
             logger.debug(f"XSRF Token: {session.cookies.get('XSRF-TOKEN', '')}")
 
             r = session.post(
-                f"{BASE_URL}/route/reservation",
+                f"{BASE_URL}/en/route/reservation",
                 data=body,
                 headers=headers,
                 cookies=session.cookies
@@ -1204,11 +1160,12 @@ def purchase_ticket(trip_type="ida", date_str=None, going_date=None):
             logger.info(f"Token de operación válido obtenido: {operation_token}")
 
             # URLs correctas según peticiones.txt
-            passengers_url = f"{BASE_URL}/pasajeros/{operation_token}"
-            operation_update_url = f"{BASE_URL}/actualizar-operacion/{operation_token}"
-            payment_url = f"{BASE_URL}/pago/{operation_token}"
-            proceed_url = f"{BASE_URL}/route/{operation_token}/proceed-reservation"
-            complete_url = f"{BASE_URL}/compra-completada/{operation_token}"
+            passengers_url = f"{BASE_URL}/en/passengers/{operation_token}"
+            operation_update_url = f"{BASE_URL}/en/operation-update/{operation_token}"
+            payment_url = f"{BASE_URL}/en/payment/{operation_token}"
+            proceed_url = f"{BASE_URL}/en/route/{operation_token}/proceed-reservation"
+            free_bonus_url = f"{BASE_URL}/en/payment/{operation_token}/free-bonus"
+            complete_url = f"{BASE_URL}/en/purchase-completed/{operation_token}"
 
             # Modificar la parte de acceso a la página de pasajeros
             passengers_retry = 0
@@ -1977,7 +1934,7 @@ def refresh_csrf():
             
             # 5. Verificar que la sesión está activa
             r = session.get(
-                f"{BASE_URL}/mi-area-privada",
+                f"{BASE_URL}/en/my-private-area",
                 headers=headers,
                 timeout=10,
                 allow_redirects=False

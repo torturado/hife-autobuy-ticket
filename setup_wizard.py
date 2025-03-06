@@ -10,6 +10,7 @@ from urllib.parse import urlencode
 import secrets
 import html
 from urllib3.filepost import encode_multipart_formdata
+from urllib.parse import quote
 
 """
 HIFE BOT - Asistente de configuración
@@ -277,7 +278,7 @@ def get_trip_ids(session, origin_id, dest_id, schedules, origin_name, dest_name)
     }
     
     # Inicializar sesión
-    r = session.get(f"{BASE_URL}/rutas")
+    r = session.get(f"{BASE_URL}/en/routes")
     if r.status_code == 200:
         soup = BeautifulSoup(r.text, 'html.parser')
         csrf_meta = soup.find('meta', {'name': 'csrf-token'})
@@ -290,7 +291,7 @@ def get_trip_ids(session, origin_id, dest_id, schedules, origin_name, dest_name)
                 'Connection': 'keep-alive',
                 'Content-Type': 'application/json',
                 'Origin': BASE_URL,
-                'Referer': f"{BASE_URL}/rutas",
+                'Referer': f"{BASE_URL}/en/routes",
                 'Sec-Fetch-Dest': 'empty',
                 'Sec-Fetch-Mode': 'cors',
                 'Sec-Fetch-Site': 'same-origin',
@@ -341,7 +342,7 @@ def get_trip_ids(session, origin_id, dest_id, schedules, origin_name, dest_name)
                     'filter_child_without_seat': '0',
                 }
                 
-                rutas_url = f"{BASE_URL}/rutas?" + "&".join([f"{k}={v}" for k, v in rutas_params.items()])
+                rutas_url = f"{BASE_URL}/en/routes?" + "&".join([f"{k}={quote(str(v))}" for k, v in rutas_params.items()])
                 
                 rutas_headers = {
                     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
@@ -361,7 +362,7 @@ def get_trip_ids(session, origin_id, dest_id, schedules, origin_name, dest_name)
                     headers=rutas_headers,
                     cookies=session.cookies
                 )
-                print(f"GET /rutas status: {r.status_code}")
+                print(f"GET /routes status: {r.status_code}")
                 
                 if r.status_code != 200:
                     print(f"Error al obtener página de rutas: {r.status_code}")
@@ -384,7 +385,7 @@ def get_trip_ids(session, origin_id, dest_id, schedules, origin_name, dest_name)
                     'from': from_id,
                     'to': to_id,
                     'pmrsr': '0',
-                    'locale': 'es',
+                    'locale': 'en',
                     'operation_type_id': '0',
                     'going_date': date_str,
                     'adults_num': '1',
@@ -400,7 +401,7 @@ def get_trip_ids(session, origin_id, dest_id, schedules, origin_name, dest_name)
                     'Accept': 'application/json, text/plain, */*',
                     'Content-Type': content_type,
                     'Origin': BASE_URL,
-                    'Referer': f"{BASE_URL}/rutas",
+                    'Referer': rutas_url,
                     'X-CSRF-TOKEN': csrf_token,
                     'X-XSRF-TOKEN': session.cookies.get('XSRF-TOKEN', ''),
                     'X-Requested-With': 'XMLHttpRequest'
@@ -430,6 +431,8 @@ def get_trip_ids(session, origin_id, dest_id, schedules, origin_name, dest_name)
                         # Procesar los viajes
                         for trip in response.get('result', []):
                             departure_time = trip.get('departure_time')
+                            
+                            # Extraer el ID del viaje (ahora es solo el ID numérico)
                             trip_id = str(trip.get('id'))
                             
                             print(f"- Viaje encontrado: {departure_time}, ID: {trip_id}")
