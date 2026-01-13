@@ -1,57 +1,41 @@
-# ⚠️⚠️ BOT EN PRUEBAS
+# 🚌 HIFE Bot - Automatización de Compra de Billetes
 
-# HIFE Bot Personalizable
+Bot de Telegram que automatiza la compra de billetes de autobús en HIFE.es usando la API oficial de middleware.
 
-Bot para compra automática de billetes en HIFE.es
+[![Python](https://img.shields.io/badge/Python-3.7+-blue.svg)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-## Descripción
+## 📋 Descripción
 
-Este bot permite la compra automática de billetes de autobús en la página web de HIFE, personalizando horarios, rutas y bonos según las necesidades del usuario. El bot se conecta a Telegram para preguntar si deseas comprar los billetes según los horarios configurados.
+Este bot te permite automatizar la compra de billetes de autobús en HIFE.es. El bot monitorea tus horarios configurados y te envía notificaciones a través de Telegram cuando es momento de comprar un billete, permitiéndote confirmar o cancelar la compra con un simple clic.
 
-## Características
+### ✨ Características
 
-- Configurable para cualquier ruta disponible en HIFE.es
-- Horarios personalizables por día de la semana
-- Soporte para diferentes tipos de bonos
-- Notificaciones a través de Telegram
-- Compra automática con confirmación del usuario
-- Reintentos automáticos en caso de fallos
-- Logs detallados para diagnosticar problemas
+-   **Automatización completa**: Monitorea horarios y notifica automáticamente
+-   **Integración con Telegram**: Notificaciones y confirmaciones mediante bot
+-   **Horarios personalizables**: Configura diferentes horarios para cada día de la semana
+-   **Soporte para bonos**: Compatible con bonos gratuitos de HIFE (MITMA Joven, etc.)
+-   **Reintentos automáticos**: Manejo robusto de errores y reintentos
+-   **Logs detallados**: Sistema de logging completo para diagnóstico
+-   **Configuración fácil**: Asistente interactivo de configuración
 
-## Requisitos previos
+## Requisitos Previos
 
-- Python 3.7 o superior
-- Cuenta en HIFE.es con un bono activo
-- Bot de Telegram (creado a través de @BotFather)
-- Acceso a internet estable
-- Sistema operativo: Windows, Linux o macOS
+-   Python 3.7 o superior
+-   Cuenta en HIFE.es con un bono activo
+-   Bot de Telegram (creado a través de [@BotFather](https://t.me/BotFather))
+-   Acceso a internet estable
 
-## ⚠️ IMPORTANTE: Configuración de idioma HIFE ⚠️
+## 🚀 Instalación
 
-Este bot está diseñado para funcionar EXCLUSIVAMENTE con cuentas de HIFE configuradas en inglés. 
-Por favor, asegúrate de que tu cuenta de HIFE.es está configurada en inglés antes de usar este bot.
-
-Para cambiar el idioma de tu cuenta HIFE:
-1. Inicia sesión en la web de HIFE.es
-2. Haz clic en el selector de idioma (normalmente en la esquina superior derecha)
-3. Selecciona "English"
-4. Verifica que la URL de navegación ha cambiado a incluir "/en/" y que la interfaz está en inglés
-
-![image](https://github.com/user-attachments/assets/b3613df8-aa89-4a2a-8097-c6e136b248de)
-
-
-El bot NO funcionará correctamente si tu cuenta está configurada en español o catalán.
-
-## Instalación
-
-### 1. Clonar el repositorio o descargar los archivos
+### 1. Clonar el repositorio
 
 ```bash
-git clone https://github.com/torturado/hife-autobuy-ticket.git
-cd hife-autobuy-ticket
+git clone https://github.com/tu-usuario/hife-bot.git
+cd hife-bot
 ```
 
-### 2. Crear un entorno virtual (recomendado)
+### 2. Crear entorno virtual (recomendado)
 
 ```bash
 # En Windows
@@ -63,37 +47,58 @@ python3 -m venv venv
 source venv/bin/activate
 ```
 
-### 3. Instalar las dependencias
+### 3. Instalar dependencias
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Crear un bot de Telegram con BotFather
+### 4. Configurar el bot
 
-1. Abre Telegram y busca @BotFather
-2. Envía el comando `/newbot`
-3. Sigue las instrucciones para crear un nuevo bot
-4. Guarda el token que te proporciona BotFather
-5. Envía un mensaje a tu nuevo bot y luego habla con @userinfobot para obtener tu ID de usuario
-
-![image](https://github.com/user-attachments/assets/3866d58c-78ee-4076-8033-750b1d606dcf)
-
-
-### 5. Ejecutar el asistente de configuración
+Ejecuta el asistente de configuración interactivo:
 
 ```bash
 python setup_wizard.py
 ```
 
-Sigue las instrucciones del asistente para configurar:
-- Tu bot de Telegram
-- Tus credenciales de HIFE
-- Estaciones de origen y destino
-- Horarios para cada día de la semana
-- Bono a utilizar
+El asistente te guiará a través de:
 
-## Uso
+1. **Configuración de Telegram**
+
+    - Token del bot (obtener de [@BotFather](https://t.me/BotFather))
+    - Tu ID de usuario (obtener de [@userinfobot](https://t.me/userinfobot))
+
+2. **Autenticación en HIFE**
+
+    - Email y contraseña de tu cuenta HIFE
+    - El sistema obtendrá automáticamente el token JWT necesario
+
+3. **Selección de Estaciones**
+
+    - Busca y selecciona tu estación de origen de una lista
+    - Busca y selecciona tu estación de destino de una lista
+    - Los IDs y códigos de parada se obtienen automáticamente de la API
+
+4. **Configuración de Horarios**
+
+    - Horarios de ida y vuelta para cada día de la semana
+    - Puedes usar un horario por defecto o configurar horarios específicos por día
+    - Minutos de antelación para notificaciones
+
+5. **Configuración de Bono**
+    - ID del bono a utilizar (default: 19 para MITMA Joven)
+
+### 5. Configuración manual (opcional)
+
+Si prefieres configurar manualmente, copia el archivo de ejemplo:
+
+```bash
+cp env.example .env
+```
+
+Edita el archivo `.env` con tus valores. Ver `env.example` para ver todas las variables disponibles.
+
+## 📖 Uso
 
 ### Iniciar el bot
 
@@ -101,57 +106,131 @@ Sigue las instrucciones del asistente para configurar:
 python main.py
 ```
 
-El bot se ejecutará en segundo plano y te enviará notificaciones a través de Telegram en los horarios configurados para preguntarte si quieres comprar billetes.
+El bot se ejecutará en segundo plano y:
 
-### Ejemplo de configuración
+-   Revisará los horarios cada 10 minutos (configurable)
+-   Te enviará notificaciones cuando falten ~2 horas para un viaje
+-   Te permitirá confirmar o cancelar la compra desde Telegram
 
-Para un usuario que viaja de Madrid a Barcelona:
+### Ejemplo de flujo
 
-- **Ida**: Lunes a viernes a las 8:00
-- **Vuelta**: 
-  - Lunes, martes, miércoles, jueves: 18:30
-  - Viernes: 16:00
+1. El bot detecta que faltan 2 horas para tu viaje de ida a las 06:45
+2. Te envía un mensaje en Telegram: "❓ ¿Compro el billete de ida para hoy a las 06:45?"
+3. Tú respondes con "✅ Comprar" o "❌ Ignorar"
+4. Si confirmas, el bot ejecuta la compra automáticamente
+5. Recibes confirmación del éxito o error de la compra
 
-El asistente de configuración te ayudará a encontrar los IDs de las estaciones y los viajes correspondientes.
+## 🔧 Configuración Avanzada
 
-### Comandos de Telegram
+### Variables de Entorno
 
-- `/start` - Inicia la conversación con el bot
-- `/si_ida` - Compra un billete de ida para hoy inmediatamente
-- `/si_vuelta` - Compra un billete de vuelta para hoy inmediatamente
-- `/horarios` - Muestra los horarios configurados actualmente
-- `/estado` - Comprueba el estado de la conexión con HIFE
-- `/ayuda` - Muestra la lista de comandos disponibles
+El bot usa variables de entorno desde el archivo `.env`. Las principales son:
 
-## Configuración manual
+#### Telegram
 
-Si necesitas ajustar la configuración manualmente, puedes editar el archivo `.env` generado por el asistente. Las principales opciones incluyen:
+-   `TELEGRAM_TOKEN`: Token del bot de Telegram
+-   `TELEGRAM_USER_ID`: Tu ID de usuario de Telegram
 
-- Credenciales (TELEGRAM_TOKEN, HIFE_EMAIL, etc.)
-- IDs de estaciones (ORIGIN_ID, DESTINATION_ID)
-- Horarios de ida y vuelta (OUTWARD_TIME_*, RETURN_TIME_*)
-- IDs de los viajes (OUTWARD_TRIP_ID_*, RETURN_TRIP_ID_*)
-- ID del bono (BONUS_ID)
+#### HIFE API
 
-## Solución de problemas
+-   `HIFE_AUTH_TOKEN`: Token JWT de autenticación (formato: `Bearer eyJ0eXAiOiJKV1Qi...`)
+-   `HIFE_API_URL`: URL base de la API (default: `https://middleware.hife.es/api`)
+-   `HIFE_CLIENT_ID`: Client ID (default: `33798`)
+-   `HIFE_APP_VERSION`: Versión de la app (default: `2.0.8`)
 
-Si encuentras algún problema:
+#### Estaciones
 
-1. Verifica que tu cuenta en HIFE.es esté activa y configurada en INGLÉS
-2. Comprueba que tienes un bono válido con saldo suficiente
-3. Revisa las credenciales en el archivo `.env`
-4. Consulta los logs en la carpeta `logs/`
-5. Si los IDs de viaje cambian, actualiza el archivo .env con los nuevos valores
-6. Usa el comando `/estado` en Telegram para verificar la conexión
+-   `ORIGIN_ID`: ID numérico de la estación de origen (sin ceros iniciales)
+-   `ORIGIN_STOP_CODE`: Código de parada de origen (con ceros iniciales, ej: `0012`)
+-   `DESTINATION_ID`: ID numérico de la estación de destino
+-   `DESTINATION_STOP_CODE`: Código de parada de destino (ej: `0007`)
 
-## Archivos principales
+#### Horarios
 
-- `main.py` - Aplicación principal del bot
-- `setup_wizard.py` - Asistente de configuración interactivo
-- `.env` - Archivo de configuración con variables personalizadas
-- `requirements.txt` - Dependencias del proyecto
+-   `OUTWARD_TIME_DEFAULT`: Hora por defecto para ida (formato: `HH:MM`)
+-   `OUTWARD_TIME_MONDAY`, `OUTWARD_TIME_TUESDAY`, etc.: Horarios específicos por día
+-   `RETURN_TIME_DEFAULT`: Hora por defecto para vuelta
+-   `RETURN_TIME_MONDAY`, etc.: Horarios específicos por día
 
-## Contribuciones
+#### Notificaciones
+
+-   `NOTIFICATION_ADVANCE_MINUTES`: Minutos de antelación para notificar (default: `120`)
+-   `CHECK_INTERVAL_MINUTES`: Intervalo de revisión en minutos (default: `10`)
+
+#### Bono
+
+-   `BONUS_ID`: ID del bono a utilizar (default: `19` para MITMA Joven)
+
+### Autenticación Automática
+
+El bot obtiene automáticamente el token JWT necesario usando tus credenciales de HIFE a través de la API de OAuth. No necesitas obtener el token manualmente.
+
+**Nota**: El token JWT tiene una validez de aproximadamente 30 días. Si el token expira, simplemente ejecuta `python setup_wizard.py` nuevamente para obtener uno nuevo.
+
+## 🐛 Solución de Problemas
+
+### El bot no inicia
+
+-   Verifica que todas las variables en `.env` estén configuradas
+-   Ejecuta `python main.py` para ver los errores específicos
+-   Si el token JWT expiró, ejecuta `python setup_wizard.py` nuevamente para obtener uno nuevo
+-   Verifica que tus credenciales de HIFE sean correctas
+
+### No recibo notificaciones
+
+-   Verifica que `TELEGRAM_USER_ID` sea correcto (habla con [@userinfobot](https://t.me/userinfobot))
+-   Comprueba que el bot esté ejecutándose (`python main.py`)
+-   Revisa los logs para ver si hay errores
+
+### Error al comprar billetes
+
+-   Verifica que tengas saldo suficiente en tu bono
+-   Comprueba que el `BONUS_ID` sea correcto
+-   Asegúrate de que los códigos de parada (`ORIGIN_STOP_CODE`, `DESTINATION_STOP_CODE`) sean correctos
+-   Revisa los logs para más detalles del error
+
+### Los horarios no coinciden
+
+-   Los IDs de viaje pueden cambiar con el tiempo
+-   Ejecuta `python setup_wizard.py` nuevamente para actualizar los IDs
+-   O edita manualmente los valores en `.env`
+
+## 📁 Estructura del Proyecto
+
+```
+hife-bot/
+├── main.py              # Punto de entrada principal
+├── androidapi.py        # Lógica principal del bot y API de HIFE
+├── config.py            # Configuración centralizada
+├── setup_wizard.py      # Asistente de configuración interactivo
+├── requirements.txt     # Dependencias de Python
+├── env.example          # Ejemplo de archivo de configuración
+├── .gitignore          # Archivos ignorados por Git
+├── .env                # Archivo de configuración (no se incluye en Git)
+└── README.md           # Este archivo
+```
+
+## 🔒 Seguridad
+
+-   **NUNCA** compartas tu archivo `.env` o lo subas a Git
+-   El archivo `.env` está en `.gitignore` por defecto
+-   Mantén tu token JWT seguro y no lo compartas
+-   Si comprometes tu token, cámbialo inmediatamente
+
+## 📝 Licencia
+
+Este proyecto está bajo la licencia MIT. Ver el archivo [LICENSE](LICENSE) para más detalles.
+
+## ⚠️ Descargo de Responsabilidad
+
+Este bot es un proyecto **no oficial** y **no está afiliado** de ninguna manera con HIFE.es.
+
+-   Úsalo bajo tu propia responsabilidad
+-   Los autores no se hacen responsables de cualquier problema derivado del uso de esta herramienta
+-   Este bot está diseñado para uso personal y educativo
+-   Respeta los términos de servicio de HIFE.es
+
+## 🤝 Contribuciones
 
 Las contribuciones son bienvenidas. Si deseas mejorar este bot:
 
@@ -161,17 +240,19 @@ Las contribuciones son bienvenidas. Si deseas mejorar este bot:
 4. Haz push a la rama (`git push origin feature/amazing-feature`)
 5. Abre un Pull Request
 
-## Limitaciones conocidas
+## 📞 Soporte
 
-- Los IDs de viaje pueden cambiar con el tiempo, requiriendo actualización manual
-- Solo funciona con bonos gratuitos de HIFE
-- No gestiona cambios en los horarios o cancelaciones de rutas
-- Solo compatible con cuentas HIFE configuradas en inglés
+Si encuentras algún problema o tienes preguntas:
 
-## Licencia
+1. Revisa la sección de [Solución de Problemas](#-solución-de-problemas)
+2. Abre un [Issue](https://github.com/tu-usuario/hife-bot/issues) en GitHub
+3. Revisa los logs del bot para más información
 
-Este software es de código abierto, distribuido bajo licencia MIT.
+## 🙏 Agradecimientos
 
-## Descargo de responsabilidad
+-   A HIFE.es por proporcionar la API pública
+-   A la comunidad de Python y Telegram por las excelentes librerías
 
-Este bot es un proyecto no oficial y no está afiliado de ninguna manera con HIFE.es. Úsalo bajo tu propia responsabilidad. Los autores no se hacen responsables de cualquier problema derivado del uso de esta herramienta. 
+---
+
+⭐ Si este proyecto te resulta útil, considera darle una estrella en GitHub
