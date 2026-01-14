@@ -1,6 +1,7 @@
 import requests
 import datetime
 import logging
+import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CallbackQueryHandler, ContextTypes
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -50,8 +51,12 @@ class HifeAutomator:
 		try:
 			logger.info(
 			    f"Iniciando compra de billete: {trip_type} para {date_str}")
+			# Use YYYY-MM-DD format (same as used in bonus API)
 			op_data = {
 			    "quantity": 1,
+			    "quantity_childs": 0,
+			    "quantity_childs_without_seat": 0,
+			    "insurance": 0,
 			    "pmrsr": 0,
 			    "origin_schedule": str(schedule_id),
 			    "goingTripDay": date_str,
@@ -61,9 +66,19 @@ class HifeAutomator:
 			op_res = requests.post(f"{self.api_url}/route/operation",
 			                       headers=self.headers,
 			                       json=op_data)
+			if op_res.status_code != 200:
+				logger.error(f"Error en operación: Status {op_res.status_code}")
+				logger.error(f"Request data: {op_data}")
+				try:
+					logger.error(f"Response: {op_res.text}")
+				except:
+					pass
 			op_res.raise_for_status()
 			op_data = op_res.json()
 			token_id = op_data['token_id']
+			# Extract token_id from list if it's a list
+			if isinstance(token_id, list):
+				token_id = token_id[0]
 			logger.info(f"Operación creada: token_id={token_id}")
 
 			if trip_type == "ida":
@@ -198,6 +213,45 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 		    f"❌ No se encontró el horario {t_time} para la fecha {t_date}.")
 
 
+def check_immediate_notification(app):
+	"""Verifica si estamos dentro de la ventana de 2 horas y pregunta inmediatamente"""
+	now = datetime.datetime.now()
+	weekday = now.weekday()
+	schedule = Config.get_schedule()
+
+	if weekday not in schedule:
+		return False
+
+	times = schedule[weekday]
+	buy_date_str = now.strftime("%Y-%m-%d")
+	advance_minutes = Config.NOTIFICATION_ADVANCE_MINUTES
+
+	for trip_type in ['ida', 'vuelta']:
+		if trip_type not in times:
+			continue
+
+		trip_time = datetime.datetime.strptime(times[trip_type],
+		                                       "%H:%M").time()
+		trip_dt = datetime.datetime.combine(now.date(), trip_time)
+		diff_minutes = (trip_dt - now).total_seconds() / 60
+
+		# Si estamos dentro de la ventana de 2 horas (0 a advance_minutes minutos antes)
+		if 0 < diff_minutes <= advance_minutes:
+			logger.info(
+			    f"⚠️ Inicio tardío detectado: viaje {trip_type} a las {times[trip_type]} "
+			    f"(faltan {diff_minutes:.1f} minutos) - Preguntando inmediatamente")
+			app.job_queue.run_once(ask_confirmation,
+			                       when=0,
+			                       data={
+			                           'type': trip_type,
+			                           'time': times[trip_type],
+			                           'date': buy_date_str
+			                       })
+			return True
+
+	return False
+
+
 def schedule_checker(app):
 	now = datetime.datetime.now()
 	weekday = now.weekday()
@@ -252,7 +306,17 @@ def main():
 
 	logger.info("✅ Configuración validada correctamente")
 
-	application = Application.builder().token(Config.TELEGRAM_TOKEN).build()
+	# Función que se ejecuta después de que la aplicación se inicializa
+	async def post_init(app: Application) -> None:
+		# Pequeño delay para asegurar que todo esté listo
+		await asyncio.sleep(2)
+		# Verificar si estamos dentro de la ventana de 2 horas al iniciar
+		immediate_notification = check_immediate_notification(app)
+		if immediate_notification:
+			logger.info("⏰ Notificación inmediata enviada - esperando respuesta del usuario...")
+
+	# Usar post_init como callback del builder
+	application = Application.builder().token(Config.TELEGRAM_TOKEN).post_init(post_init).build()
 	application.add_handler(CallbackQueryHandler(handle_callback))
 
 	scheduler = BackgroundScheduler()
