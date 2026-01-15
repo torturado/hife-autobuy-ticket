@@ -71,7 +71,7 @@ class Config:
 	                                            '10'))
 
 	@classmethod
-	def get_schedule(cls) -> Dict[int, Dict[str, str]]:
+	def get_schedule(cls) -> Dict[int, Dict[str, Optional[str]]]:
 		schedule = {}
 		day_map = {
 		    0: ('OUTWARD_TIME_MONDAY', 'RETURN_TIME_MONDAY'),
@@ -82,11 +82,16 @@ class Config:
 		}
 
 		for day, (outward_key, return_key) in day_map.items():
-			outward_time = getattr(cls,
-			                       outward_key) or cls.OUTWARD_TIME_DEFAULT
-			return_time = getattr(cls, return_key) or cls.RETURN_TIME_DEFAULT
+			# Obtener valores específicos del día
+			outward_specific = getattr(cls, outward_key)
+			return_specific = getattr(cls, return_key)
 
-			if outward_time and return_time:
+			# Usar default si el valor específico es None o está vacío
+			outward_time = outward_specific if outward_specific else cls.OUTWARD_TIME_DEFAULT
+			return_time = return_specific if return_specific else cls.RETURN_TIME_DEFAULT
+
+			# Agregar al schedule si al menos uno de los valores está configurado
+			if outward_time or return_time:
 				schedule[day] = {"ida": outward_time, "vuelta": return_time}
 
 		return schedule

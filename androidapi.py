@@ -230,6 +230,10 @@ def check_immediate_notification(app):
 		if trip_type not in times:
 			continue
 
+		if times[trip_type] is None:
+			logger.warning(f"Horario {trip_type} no configurado para este día")
+			continue
+
 		trip_time = datetime.datetime.strptime(times[trip_type],
 		                                       "%H:%M").time()
 		trip_dt = datetime.datetime.combine(now.date(), trip_time)
@@ -270,6 +274,10 @@ def schedule_checker(app):
 
 	for trip_type in ['ida', 'vuelta']:
 		if trip_type not in times:
+			continue
+
+		if times[trip_type] is None:
+			logger.warning(f"Horario {trip_type} no configurado para este día")
 			continue
 
 		trip_time = datetime.datetime.strptime(times[trip_type],
