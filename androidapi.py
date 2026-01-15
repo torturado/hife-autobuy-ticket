@@ -38,8 +38,8 @@ class HifeAutomator:
 		    'pmrsr':
 		    0,
 		    'client_id':
-		    Config.HIFE_CLIENT_ID_VALIDATED if Config.HIFE_CLIENT_ID_VALIDATED
-		    is not None else int(Config.HIFE_CLIENT_ID or '33798'),
+		    Config.HIFE_CLIENT_ID_VALIDATED
+		    if Config.HIFE_CLIENT_ID_VALIDATED is not None else 33798,
 		    'trip_main_info[adults_num]':
 		    1,
 		    'trip_main_info[operation_type_id]':

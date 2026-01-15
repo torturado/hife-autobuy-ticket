@@ -263,7 +263,8 @@ def get_available_bonuses(auth_token):
 	    spinner="dots"):
 		try:
 			response = requests.get('https://middleware.hife.es/api/bonus',
-			                        headers=headers)
+			                        headers=headers,
+			                        timeout=10)
 			response.raise_for_status()
 			data = response.json()
 			# Extraer arrays de bonos disponibles y activos
@@ -291,9 +292,24 @@ def get_available_bonuses(auth_token):
 				}
 
 			return {'available': available_bonuses, 'active': active_bonus}
+		except requests.exceptions.Timeout:
+			error_panel = Panel(
+			    "[red]Error: Timeout al conectar con el servidor de HIFE[/red]\n"
+			    "Por favor, verifica tu conexión a internet e intenta de nuevo.",
+			    title="[red]❌ Error de Timeout[/red]",
+			    border_style="red")
+			console.print(error_panel)
+			return None
+		except requests.exceptions.RequestException as e:
+			error_panel = Panel(
+			    f"[red]Error de red/HTTP al obtener bonos:[/red]\n{str(e)}",
+			    title="[red]❌ Error de Red[/red]",
+			    border_style="red")
+			console.print(error_panel)
+			return None
 		except Exception as e:
 			error_panel = Panel(
-			    f"[red]Error al obtener bonos de la API:[/red]\n{str(e)}",
+			    f"[red]Error inesperado al obtener bonos:[/red]\n{str(e)}",
 			    title="[red]❌ Error[/red]",
 			    border_style="red")
 			console.print(error_panel)
