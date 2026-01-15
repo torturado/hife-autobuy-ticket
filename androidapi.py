@@ -221,18 +221,48 @@ async def ask_confirmation(context: ContextTypes.DEFAULT_TYPE):
 	job = context.job
 	data = job.data
 
+	# Formatear fecha de forma legible
+	trip_date = datetime.datetime.strptime(data['date'], "%Y-%m-%d")
+	date_formatted = trip_date.strftime("%d/%m/%Y")
+	day_name = trip_date.strftime("%A").lower()
+	day_names_es = {
+	    'monday': 'Lunes',
+	    'tuesday': 'Martes',
+	    'wednesday': 'Miércoles',
+	    'thursday': 'Jueves',
+	    'friday': 'Viernes',
+	    'saturday': 'Sábado',
+	    'sunday': 'Domingo'
+	}
+	day_display = day_names_es.get(day_name, day_name.capitalize())
+
+	# Determinar estaciones según el tipo de viaje
+	if data['type'] == "ida":
+		origin = Config.ORIGIN_NAME or f"Estación {Config.ORIGIN_ID}"
+		destination = Config.DESTINATION_NAME or f"Estación {Config.DESTINATION_ID}"
+	else:
+		origin = Config.DESTINATION_NAME or f"Estación {Config.DESTINATION_ID}"
+		destination = Config.ORIGIN_NAME or f"Estación {Config.ORIGIN_ID}"
+
 	keyboard = [[
 	    InlineKeyboardButton(
-	        "✅ Comprar",
+	        "✅ Sí, comprar",
 	        callback_data=f"buy|{data['type']}|{data['time']}|{data['date']}"),
-	    InlineKeyboardButton("❌ Ignorar", callback_data="cancel")
+	    InlineKeyboardButton("❌ No, ignorar", callback_data="cancel")
 	]]
 	reply_markup = InlineKeyboardMarkup(keyboard)
-	await context.bot.send_message(
-	    Config.TELEGRAM_USER_ID,
-	    text=
-	    f"❓ ¿Compro el billete de {data['type']} para hoy a las {data['time']}?",
-	    reply_markup=reply_markup)
+
+	message_text = (f"🚌 *Notificación de Viaje*\n\n"
+	                f"📅 *Fecha:* {day_display}, {date_formatted}\n"
+	                f"⏰ *Hora:* {data['time']}\n"
+	                f"📍 *Ruta:* {origin} → {destination}\n"
+	                f"🎫 *Tipo:* {data['type'].capitalize()}\n\n"
+	                f"¿Deseas que compre el billete ahora?")
+
+	await context.bot.send_message(Config.TELEGRAM_USER_ID,
+	                               text=message_text,
+	                               reply_markup=reply_markup,
+	                               parse_mode='Markdown')
 	console.print(
 	    f"[cyan]📱[/cyan] Notificación enviada: [yellow]{data['type']}[/yellow] a las [cyan]{data['time']}[/cyan]"
 	)
@@ -243,12 +273,25 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 	await query.answer()
 
 	if query.data == "cancel":
-		await query.edit_message_text("❌ Operación cancelada.")
+		await query.edit_message_text(
+		    "❌ *Operación cancelada*\n\n"
+		    "No se realizará ninguna compra.",
+		    parse_mode='Markdown')
 		return
 
 	_, t_type, t_time, t_date = query.data.split('|')
+
+	# Formatear fecha
+	trip_date = datetime.datetime.strptime(t_date, "%Y-%m-%d")
+	date_formatted = trip_date.strftime("%d/%m/%Y")
+
 	await query.edit_message_text(
-	    f"⏳ Procesando compra de {t_type} ({t_time})...")
+	    f"⏳ *Procesando compra...*\n\n"
+	    f"📅 Fecha: {date_formatted}\n"
+	    f"⏰ Hora: {t_time}\n"
+	    f"🎫 Tipo: {t_type.capitalize()}\n\n"
+	    f"Por favor, espera un momento...",
+	    parse_mode='Markdown')
 
 	if t_type == "ida":
 		origin = Config.ORIGIN_ID
@@ -260,20 +303,61 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 	date_search = datetime.datetime.strptime(t_date,
 	                                         "%Y-%m-%d").strftime("%d-%m-%Y")
 	schedule_id = automator.get_trip_id(origin, dest, date_search, t_time)
+
+	# Formatear fecha para mensajes
+	trip_date = datetime.datetime.strptime(t_date, "%Y-%m-%d")
+	date_formatted = trip_date.strftime("%d/%m/%Y")
+
+	# Determinar estaciones según el tipo de viaje
+	if t_type == "ida":
+		origin_name = Config.ORIGIN_NAME or f"Estación {Config.ORIGIN_ID}"
+		dest_name = Config.DESTINATION_NAME or f"Estación {Config.DESTINATION_ID}"
+	else:
+		origin_name = Config.DESTINATION_NAME or f"Estación {Config.DESTINATION_ID}"
+		dest_name = Config.ORIGIN_NAME or f"Estación {Config.ORIGIN_ID}"
+
 	if schedule_id:
 		success = automator.buy_ticket(schedule_id, t_date, t_type)
 		if success:
-			await context.bot.send_message(
-			    Config.TELEGRAM_USER_ID,
-			    f"✅ ¡Billete de {t_type} comprado con éxito!")
+			success_message = (f"✅ *¡Billete comprado con éxito!*\n\n"
+			                   f"📅 *Fecha:* {date_formatted}\n"
+			                   f"⏰ *Hora:* {t_time}\n"
+			                   f"📍 *Ruta:* {origin_name} → {dest_name}\n"
+			                   f"🎫 *Tipo:* {t_type.capitalize()}\n\n"
+			                   f"Tu billete está listo. ¡Buen viaje! 🚌")
+			await context.bot.send_message(Config.TELEGRAM_USER_ID,
+			                               text=success_message,
+			                               parse_mode='Markdown')
 		else:
-			await context.bot.send_message(
-			    Config.TELEGRAM_USER_ID,
-			    f"⚠️ Error al procesar el pago del billete de {t_type}.")
+			error_message = (
+			    f"⚠️ *Error al procesar la compra*\n\n"
+			    f"📅 Fecha: {date_formatted}\n"
+			    f"⏰ Hora: {t_time}\n"
+			    f"🎫 Tipo: {t_type.capitalize()}\n\n"
+			    f"No se pudo completar el pago del billete.\n\n"
+			    f"*Posibles causas:*\n"
+			    f"• Saldo insuficiente en el bono\n"
+			    f"• Bono expirado\n"
+			    f"• Problema temporal con la API\n\n"
+			    f"Por favor, intenta comprar manualmente o revisa tu bono.")
+			await context.bot.send_message(Config.TELEGRAM_USER_ID,
+			                               text=error_message,
+			                               parse_mode='Markdown')
 	else:
-		await context.bot.send_message(
-		    Config.TELEGRAM_USER_ID,
-		    f"❌ No se encontró el horario {t_time} para la fecha {t_date}.")
+		not_found_message = (
+		    f"❌ *Horario no encontrado*\n\n"
+		    f"📅 Fecha: {date_formatted}\n"
+		    f"⏰ Hora solicitada: {t_time}\n"
+		    f"🎫 Tipo: {t_type.capitalize()}\n\n"
+		    f"No se encontró un viaje disponible para este horario.\n\n"
+		    f"*Posibles causas:*\n"
+		    f"• El horario no existe para esta fecha\n"
+		    f"• Cambios en los horarios de la línea\n"
+		    f"• Problema temporal con la API\n\n"
+		    f"Por favor, verifica los horarios disponibles.")
+		await context.bot.send_message(Config.TELEGRAM_USER_ID,
+		                               text=not_found_message,
+		                               parse_mode='Markdown')
 
 
 def check_immediate_notification(app):

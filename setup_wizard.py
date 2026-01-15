@@ -409,6 +409,11 @@ def select_stop(stops_data, stop_type="origen"):
 	selected_text = questionary.select(
 	    f"Selecciona la estación de {stop_type}:", choices=choices).ask()
 
+	# Verificar si el usuario canceló la selección
+	if selected_text is None:
+		console.print("[yellow]⚠️ Selección cancelada por el usuario[/yellow]")
+		return None
+
 	# Extraer el índice de la selección
 	selected_index = choices.index(selected_text)
 	return matches[selected_index]
@@ -833,6 +838,16 @@ def main():
 		selected_bonus = questionary.select("Selecciona el bono a utilizar:",
 		                                    choices=bonus_choices +
 		                                    ["Ingresar ID manualmente"]).ask()
+
+		# Verificar si el usuario canceló la selección
+		if selected_bonus is None:
+			console.print(
+			    "[yellow]⚠️ Selección cancelada por el usuario[/yellow]")
+			# Usar valor por defecto si se cancela
+			config['bonus_id'] = "19"
+			console.print(
+			    "[cyan]💡[/cyan] Usando bono por defecto: [yellow]MITMA Joven[/yellow] (ID: [magenta]19[/magenta])"
+			)
 
 		if selected_bonus == "Ingresar ID manualmente":
 			bonus_id = questionary.text(

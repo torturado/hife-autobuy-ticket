@@ -75,7 +75,7 @@ Antes de comenzar, asegúrate de tener:
 
 ```bash
 git clone https://github.com/torturado/hife-autobuy-ticket.git
-cd hife-bot
+cd hife-autobuy-ticket
 ```
 
 ### Paso 2: Crear entorno virtual (recomendado)
