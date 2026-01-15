@@ -1,6 +1,9 @@
 import os
+import logging
 from dotenv import load_dotenv
 from typing import Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 try:
 	load_dotenv()
@@ -26,14 +29,17 @@ class Config:
 	HIFE_API_URL: str = os.getenv('HIFE_API_URL',
 	                              'https://middleware.hife.es/api')
 	HIFE_AUTH_TOKEN: str = os.getenv('HIFE_AUTH_TOKEN', '')
-	HIFE_CLIENT_ID: int = int(os.getenv('HIFE_CLIENT_ID', '33798'))
+	HIFE_CLIENT_ID: Optional[str] = os.getenv('HIFE_CLIENT_ID', '33798')
+	HIFE_CLIENT_ID_VALIDATED: Optional[int] = None  # Set during validation
 	HIFE_APP_VERSION: str = os.getenv('HIFE_APP_VERSION', '2.0.8')
 
 	# Estaciones
 	ORIGIN_ID: str = os.getenv('ORIGIN_ID', '')
 	ORIGIN_STOP_CODE: str = os.getenv('ORIGIN_STOP_CODE', '')
+	ORIGIN_NAME: str = os.getenv('ORIGIN_NAME', '')
 	DESTINATION_ID: str = os.getenv('DESTINATION_ID', '')
 	DESTINATION_STOP_CODE: str = os.getenv('DESTINATION_STOP_CODE', '')
+	DESTINATION_NAME: str = os.getenv('DESTINATION_NAME', '')
 
 	# Bono
 	BONUS_ID: str = os.getenv('BONUS_ID', '19')
@@ -64,11 +70,21 @@ class Config:
 	    'RETURN_TIME_THURSDAY') or None
 	RETURN_TIME_FRIDAY: Optional[str] = os.getenv('RETURN_TIME_FRIDAY') or None
 
-	# Notificaciones
-	NOTIFICATION_ADVANCE_MINUTES: int = int(
-	    os.getenv('NOTIFICATION_ADVANCE_MINUTES', '120'))
-	CHECK_INTERVAL_MINUTES: int = int(os.getenv('CHECK_INTERVAL_MINUTES',
-	                                            '10'))
+	# Notificaciones - initialized via parse_int_env at module level
+	NOTIFICATION_ADVANCE_MINUTES: int = None
+	CHECK_INTERVAL_MINUTES: int = None
+
+	@staticmethod
+	def parse_int_env(name: str, default: str) -> int:
+		"""Safely parse an integer from an environment variable with fallback to default."""
+		env_value = os.getenv(name, default)
+		try:
+			return int(env_value)
+		except ValueError:
+			logger.warning(
+			    f"Invalid value for {name}: '{env_value}', using default: {default}"
+			)
+			return int(default)
 
 	@classmethod
 	def get_schedule(cls) -> Dict[int, Dict[str, Optional[str]]]:
@@ -86,9 +102,21 @@ class Config:
 			outward_specific = getattr(cls, outward_key)
 			return_specific = getattr(cls, return_key)
 
+			# Normalizar valores específicos: convertir 'None' string y vacíos a None
+			if not outward_specific or outward_specific == 'None' or outward_specific == '':
+				outward_specific = None
+			if not return_specific or return_specific == 'None' or return_specific == '':
+				return_specific = None
+
 			# Usar default si el valor específico es None o está vacío
 			outward_time = outward_specific if outward_specific else cls.OUTWARD_TIME_DEFAULT
 			return_time = return_specific if return_specific else cls.RETURN_TIME_DEFAULT
+
+			# Normalizar defaults también: convertir 'None' string y vacíos a None
+			if not outward_time or outward_time == 'None' or outward_time == '':
+				outward_time = None
+			if not return_time or return_time == 'None' or return_time == '':
+				return_time = None
 
 			# Agregar al schedule si al menos uno de los valores está configurado
 			if outward_time or return_time:
@@ -115,6 +143,17 @@ class Config:
 	def validate(cls):
 		errors = []
 
+		# Validate and convert HIFE_CLIENT_ID
+		if not cls.HIFE_CLIENT_ID:
+			errors.append("HIFE_CLIENT_ID no configurado")
+		else:
+			try:
+				cls.HIFE_CLIENT_ID_VALIDATED = int(cls.HIFE_CLIENT_ID)
+			except ValueError:
+				errors.append(
+				    f"HIFE_CLIENT_ID debe ser un número entero, valor recibido: '{cls.HIFE_CLIENT_ID}'"
+				)
+
 		if not cls.TELEGRAM_TOKEN:
 			errors.append("TELEGRAM_TOKEN no configurado")
 		if not cls.TELEGRAM_USER_ID:
@@ -137,3 +176,10 @@ class Config:
 			errors.append("No hay horarios configurados")
 
 		return len(errors) == 0, errors
+
+
+# Initialize notification settings at module level with safe parsing
+Config.NOTIFICATION_ADVANCE_MINUTES = Config.parse_int_env(
+    'NOTIFICATION_ADVANCE_MINUTES', '120')
+Config.CHECK_INTERVAL_MINUTES = Config.parse_int_env('CHECK_INTERVAL_MINUTES',
+                                                     '10')
