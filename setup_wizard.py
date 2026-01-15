@@ -1,17 +1,13 @@
-import requests
-from bs4 import BeautifulSoup
-import json
-import time
-from datetime import datetime, timedelta
-import pytz
 import os
+import re
+import requests
 from getpass import getpass
-from urllib.parse import urlencode
-import secrets
-import html
-from urllib3.filepost import encode_multipart_formdata
-from urllib.parse import quote
-
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.text import Text
+import questionary
 """
 HIFE BOT - Asistente de configuración
 
@@ -29,734 +25,905 @@ Licencia: MIT
 Versión: 1.0
 """
 
-def print_header(text):
-    """
-    Imprime un encabezado formateado para las secciones del asistente.
-    
+console = Console()
+
+
+def print_header(text, icon="📋"):
+	"""
+    Imprime un encabezado formateado para las secciones del asistente usando Rich.
+
     Args:
         text (str): Texto a mostrar como encabezado
+        icon (str): Icono a mostrar junto al título
     """
-    print("\n" + "="*50)
-    print(text)
-    print("="*50 + "\n")
+	console.print()
+	console.print(
+	    Panel(f"[cyan]{text}[/cyan]",
+	          border_style="cyan",
+	          title=f"{icon} {text}",
+	          title_align="left"))
+
+
+def validate_time_format(time_str):
+	"""Valida que el formato de hora sea HH:MM"""
+	if not time_str:
+		return True  # Permitir vacío para valores opcionales
+	pattern = r'^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'
+	return bool(re.match(pattern, time_str))
+
+
+def validate_email(email_str):
+	"""Valida formato básico de email"""
+	if not email_str:
+		return False
+	pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+	return bool(re.match(pattern, email_str))
+
 
 def get_telegram_info():
-    """
-    Solicita al usuario información sobre su bot de Telegram.
-    
+	"""
+    Solicita al usuario información sobre su bot de Telegram usando Questionary.
+
     Returns:
         tuple: (token del bot, ID de usuario)
     """
-    print_header("Configuración de Telegram")
-    print("Para obtener el token de tu bot:")
-    print("1. Habla con @BotFather en Telegram")
-    print("2. Usa el comando /newbot")
-    print("3. Sigue las instrucciones y copia el token que te da")
-    
-    token = input("\nIntroduce el token de tu bot: ")
-    user_id = input("Introduce tu ID de usuario de Telegram (puedes obtenerlo hablando con @userinfobot): ")
-    
-    return token, user_id
+	print_header("Configuración de Telegram", "📱")
 
-def get_hife_credentials():
-    print_header("Credenciales de HIFE")
-    print("Introduce tus credenciales de la web de HIFE")
-    email = input("Email: ")
-    password = getpass("Contraseña: ")
-    return email, password
+	info_text = ("[yellow]Para obtener el token de tu bot:[/yellow]\n"
+	             "1. Habla con [cyan]@BotFather[/cyan] en Telegram\n"
+	             "2. Usa el comando [cyan]/newbot[/cyan]\n"
+	             "3. Sigue las instrucciones y copia el token que te da")
+	console.print(Panel(info_text, border_style="yellow"))
 
-BASE_URL = "https://www.hife.es"
+	token = questionary.text(
+	    "Introduce el token de tu bot:",
+	    validate=lambda text: True
+	    if text.strip() else "El token no puede estar vacío").ask()
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
-    "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Connection": "keep-alive",
-    "X-Requested-With": "XMLHttpRequest",
-    "Origin": BASE_URL,
-    "Referer": f"{BASE_URL}/rutas",
-    "Sec-Fetch-Dest": "empty",
-    "Sec-Fetch-Mode": "cors", 
-    "Sec-Fetch-Site": "same-origin"
-}
+	user_id = questionary.text(
+	    "Introduce tu ID de usuario de Telegram (puedes obtenerlo hablando con @userinfobot):",
+	    validate=lambda text: True
+	    if text.strip() else "El ID de usuario no puede estar vacío").ask()
 
-def login_hife(session, email, password):
-    """Inicia sesión en HIFE."""
-    print("\nIniciando sesión en HIFE...")
-    try:
-        # 1. GET a la página de login para obtener el token CSRF
-        r = session.get(f"{BASE_URL}/en/client/login")
-        if r.status_code != 200:
-            print(f"Error al obtener página de login: {r.status_code}")
-            return False
-            
-        # Extraer token CSRF
-        soup = BeautifulSoup(r.text, 'html.parser')
-        csrf_meta = soup.find('meta', {'name': 'csrf-token'})
-        if not csrf_meta or not csrf_meta.get('content'):
-            print("No se encontró token CSRF en la página de login")
-            return False
-            
-        csrf_token = csrf_meta['content']
-        
-        # 2. Actualizar headers para el login
-        session.headers.update({
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Cache-Control': 'max-age=0',
-            'Connection': 'keep-alive',
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Origin': 'https://www.hife.es',
-            'Referer': f"https://www.hife.es/en/client/login",
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'same-origin',
-            'Sec-Fetch-User': '?1',
-            'Sec-GPC': '1',
-            'Upgrade-Insecure-Requests': '1',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
-            'sec-ch-ua': '"Not(A:Brand";v="99", "Brave";v="133", "Chromium";v="133"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
-        })
-        
-        # 3. Realizar POST con credenciales
-        login_data = {
-            '_token': csrf_token,
-            'email': email,
-            'password': password,
-            'redirect': ''
-        }
-        
-        r = session.post(
-            f"{BASE_URL}/en/client/login",
-            data=login_data,
-            allow_redirects=True
-        )
-        
-        # 4. Verificar que estamos logueados correctamente
-        if f"{BASE_URL}/en/my-private-area" not in r.url:
-            print("Login fallido - URL después del login:", r.url)
-            return False
-            
-        print("Login exitoso")
-        return True
-        
-    except Exception as e:
-        print(f"Error en el proceso de login: {e}")
-        return False
+	return token, user_id
 
-def get_stations():
-    print_header("Configuración de Estaciones")
-    
-    print("Estación de origen:")
-    origin_name = input("Nombre (ej: VINARÒS): ").upper()
-    
-    print("\nEstación de destino:")
-    dest_name = input("Nombre (ej: AMPOSTA): ").upper()
-    
-    return origin_name, dest_name
 
-def get_station_ids(session, origin_name, dest_name):
-    """Obtiene los IDs de las estaciones."""
-    print("\nObteniendo IDs de estaciones...")
-    
-    try:
-        # 1. Obtener lista inicial de estaciones
-        print(f"Obteniendo lista de estaciones...")
-        r = session.get(f"{BASE_URL}/en/free-bonus/register")
-        if r.status_code != 200:
-            print("Error al obtener página de registro")
-            return None, None
+def get_jwt_token():
+	"""Obtiene el token JWT automáticamente usando las credenciales de HIFE"""
+	print_header("Autenticación en HIFE", "🔐")
 
-        # Buscar el array de estaciones en el HTML
-        soup = BeautifulSoup(r.text, 'html.parser')
-        stops_data = soup.find('free-bonus-register', {':stops': True})
-        if not stops_data:
-            print("No se encontró la lista de estaciones")
-            return None, None
+	info_text = (
+	    "[yellow]Introduce tus credenciales de HIFE para obtener el token de acceso automáticamente.[/yellow]"
+	)
+	console.print(Panel(info_text, border_style="yellow"))
 
-        # Obtener y procesar el array de estaciones
-        stops_str = stops_data[':stops']
-        stops = json.loads(html.unescape(stops_str))
+	email = questionary.text(
+	    "Email de HIFE:",
+	    validate=lambda text: validate_email(text)
+	    if text.strip() else "El email no puede estar vacío").ask()
 
-        # Buscar la estación de origen
-        origin_station = None
-        for station in stops:
-            if station['name'].upper() == origin_name:
-                origin_station = station
-                print(f"Estación de origen encontrada: {station['name']} (código: {station['code']})")
-                break
+	password = questionary.password("Contraseña de HIFE:").ask()
 
-        if not origin_station:
-            print(f"No se encontró la estación de origen: {origin_name}")
-            print("\nEstaciones disponibles:")
-            for station in stops:
-                print(f"- {station['name']}")
-            return None, None
+	# Get client_secret from environment variable or prompt user
+	client_secret = os.getenv('HIFE_CLIENT_SECRET')
+	if not client_secret:
+		console.print(
+		    Panel(
+		        "[yellow]⚠️ HIFE_CLIENT_SECRET no encontrado en variables de entorno.[/yellow]\n"
+		        "Por favor, introduce el client_secret de HIFE.",
+		        border_style="yellow",
+		        title="⚠️ Advertencia"))
+		client_secret = questionary.password("Client Secret de HIFE:").ask()
+		if not client_secret:
+			console.print("[red]❌ Error: Client Secret es requerido[/red]")
+			return None
 
-        # 2. Obtener destinos válidos usando el código de la estación de origen
-        print(f"\nBuscando destinos válidos desde {origin_name}...")
-        r = session.get(f"{BASE_URL}/free-bonus/get-valid-destination-stops/{origin_station['code']}")
-        if r.status_code != 200:
-            print("Error al obtener destinos válidos")
-            return None, None
+	headers = {
+	    'accept':
+	    'application/json; charset=utf-8',
+	    'app-version':
+	    '2.0.8',
+	    'content-type':
+	    'application/json; charset=utf-8',
+	    'user-agent':
+	    'Dalvik/2.1.0 (Linux; U; Android 12; SM-S916U Build/9643478.0)'
+	}
 
-        destinations = r.json()
-        dest_station = None
+	data = {
+	    'client_id': 2,
+	    'client_secret': client_secret,
+	    'grant_type': 'password',
+	    'username': email,
+	    'password': password
+	}
 
-        # Buscar la estación de destino
-        for station in destinations:
-            if station['name'].upper() == dest_name:
-                dest_station = station
-                print(f"Estación de destino encontrada: {station['name']} (código: {station['code']})")
-                break
+	with console.status("[cyan]Obteniendo token de acceso...", spinner="dots"):
+		try:
+			response = requests.post('https://middleware.hife.es/oauth/token',
+			                         headers=headers,
+			                         json=data,
+			                         timeout=10)
+			response.raise_for_status()
+			result = response.json()
 
-        if not dest_station:
-            print(f"No se encontró la estación de destino: {dest_name}")
-            print("\nDestinos válidos disponibles desde {origin_name}:")
-            for station in destinations:
-                print(f"- {station['name']}")
-            return None, None
+			access_token = result.get('access_token')
+			if not access_token:
+				console.print(
+				    "[red]❌ Error: No se recibió el token de acceso[/red]")
+				return None
 
-        # Devolver los IDs sin ceros iniciales
-        return origin_station['code'].lstrip('0'), dest_station['code'].lstrip('0')
+			refresh_token = result.get('refresh_token')
+			expires_in = result.get('expires_in', 0)
+			days = expires_in // 86400 if expires_in > 0 else 0
 
-    except Exception as e:
-        print(f"Error al obtener IDs de estaciones: {e}")
-        return None, None
+			console.print(
+			    f"[green]✅ Token obtenido correctamente (expira en {days} días)[/green]"
+			)
+
+			return f'Bearer {access_token}'
+
+		except requests.exceptions.Timeout:
+			error_panel = Panel(
+			    "[red]Error: Timeout al conectar con el servidor de HIFE[/red]\n"
+			    "Por favor, verifica tu conexión a internet e intenta de nuevo.",
+			    title="[red]❌ Error de Timeout[/red]",
+			    border_style="red")
+			console.print(error_panel)
+			return None
+		except requests.exceptions.RequestException as e:
+			error_panel = Panel(
+			    f"[red]Error de red al obtener token:[/red]\n{str(e)}",
+			    title="[red]❌ Error de Red[/red]",
+			    border_style="red")
+			console.print(error_panel)
+			return None
+		except requests.exceptions.HTTPError as e:
+			if e.response.status_code == 401:
+				console.print("[red]❌ Error: Credenciales incorrectas[/red]")
+			else:
+				error_panel = Panel(
+				    f"[red]Error HTTP {e.response.status_code}[/red]\n"
+				    f"Mensaje: {e.response.text[:200] if hasattr(e.response, 'text') else 'Error desconocido'}",
+				    title="[red]❌ Error[/red]",
+				    border_style="red")
+				console.print(error_panel)
+			return None
+		except Exception as e:
+			error_panel = Panel(
+			    f"[red]Error al obtener token:[/red]\n{str(e)}",
+			    title="[red]❌ Error[/red]",
+			    border_style="red")
+			console.print(error_panel)
+			return None
+
+
+def get_stops_from_api(auth_token):
+	"""Obtiene todas las paradas de la API de HIFE"""
+	headers = {
+	    'accept':
+	    'application/json; charset=utf-8',
+	    'app-version':
+	    '2.0.8',
+	    'authorization':
+	    auth_token,
+	    'content-type':
+	    'application/json; charset=utf-8',
+	    'user-agent':
+	    'Dalvik/2.1.0 (Linux; U; Android 12; SM-S916U Build/9643478.0)'
+	}
+
+	with console.status(
+	    "[cyan]Obteniendo lista de paradas de la API de HIFE...",
+	    spinner="dots"):
+		try:
+			response = requests.get('https://middleware.hife.es/api/stops',
+			                        headers=headers,
+			                        timeout=10)
+			response.raise_for_status()
+			try:
+				return response.json()
+			except ValueError as e:
+				error_panel = Panel(
+				    f"[red]Error al decodificar respuesta JSON:[/red]\n{str(e)}\n"
+				    f"Status code: {response.status_code}",
+				    title="[red]❌ Error de Decodificación[/red]",
+				    border_style="red")
+				console.print(error_panel)
+				return None
+		except requests.exceptions.RequestException as e:
+			error_panel = Panel(
+			    f"[red]Error de red/HTTP al obtener paradas:[/red]\n{str(e)}",
+			    title="[red]❌ Error de Red[/red]",
+			    border_style="red")
+			console.print(error_panel)
+			return None
+		except Exception as e:
+			error_panel = Panel(
+			    f"[red]Error inesperado al obtener paradas:[/red]\n{str(e)}",
+			    title="[red]❌ Error[/red]",
+			    border_style="red")
+			console.print(error_panel)
+			return None
+
+
+def get_available_bonuses(auth_token):
+	"""Obtiene los bonos disponibles y activos de la API de HIFE"""
+	headers = {
+	    'accept': 'application/json; charset=utf-8',
+	    'app-version': '2.0.8',
+	    'authorization': auth_token,
+	    'content-type': 'application/json; charset=utf-8',
+	    'user-agent':
+	    'Dalvik/2.1.0 (Linux; U; Android 12; SM-S916U Build/9643478.0)',
+	    'hife-locale': 'es'
+	}
+
+	with console.status(
+	    "[cyan]Obteniendo bonos disponibles de la API de HIFE...",
+	    spinner="dots"):
+		try:
+			response = requests.get('https://middleware.hife.es/api/bonus',
+			                        headers=headers,
+			                        timeout=10)
+			response.raise_for_status()
+			data = response.json()
+			# Extraer arrays de bonos disponibles y activos
+			available_bonuses = data.get('availableBonuses', [])
+			bonus_items = data.get('bonusItems', [])
+
+			# Identificar el bono activo (primer item de bonusItems)
+			active_bonus = None
+			if bonus_items and len(bonus_items) > 0:
+				first_item = bonus_items[0]
+				active_bonus = {
+				    'bonus_item_id':
+				    first_item.get('id'),
+				    'bonus_type_id':
+				    first_item.get('bonus_type_id'),
+				    'expired':
+				    first_item.get('expired', False),
+				    'current_funds_amount':
+				    first_item.get('current_funds_amount', 0),
+				    'initial_funds_amount':
+				    first_item.get('initial_funds_amount', 0),
+				    'bonus_name':
+				    first_item.get('bonus', {}).get('current_language',
+				                                    {}).get('name', '')
+				}
+
+			return {'available': available_bonuses, 'active': active_bonus}
+		except requests.exceptions.Timeout:
+			error_panel = Panel(
+			    "[red]Error: Timeout al conectar con el servidor de HIFE[/red]\n"
+			    "Por favor, verifica tu conexión a internet e intenta de nuevo.",
+			    title="[red]❌ Error de Timeout[/red]",
+			    border_style="red")
+			console.print(error_panel)
+			return None
+		except requests.exceptions.RequestException as e:
+			error_panel = Panel(
+			    f"[red]Error de red/HTTP al obtener bonos:[/red]\n{str(e)}",
+			    title="[red]❌ Error de Red[/red]",
+			    border_style="red")
+			console.print(error_panel)
+			return None
+		except Exception as e:
+			error_panel = Panel(
+			    f"[red]Error inesperado al obtener bonos:[/red]\n{str(e)}",
+			    title="[red]❌ Error[/red]",
+			    border_style="red")
+			console.print(error_panel)
+			return None
+
+
+def search_stop(stops_data, search_term):
+	"""Busca una parada por nombre en los datos de la API"""
+	if not stops_data:
+		return None
+
+	search_term = search_term.upper().strip()
+	matches = []
+
+	for city_data in stops_data:
+		for stop in city_data.get('stops', []):
+			stop_name = stop.get('name', '').upper()
+
+			# Buscar en el nombre principal
+			if search_term in stop_name or stop_name in search_term:
+				stop_id = str(stop.get('id', ''))
+				stop_code = None
+
+				# Obtener el stop_code de los synonyms (todos tienen el mismo)
+				if stop.get('synonyms') and len(stop.get('synonyms', [])) > 0:
+					stop_code = stop['synonyms'][0].get('stop_code', '')
+
+				matches.append({
+				    'id': stop_id,
+				    'stop_code': stop_code or stop_id.zfill(4),
+				    'name': stop.get('name', ''),
+				    'city': city_data.get('city', ''),
+				    'address': stop.get('adress', '')
+				})
+
+	return matches
+
+
+def select_stop(stops_data, stop_type="origen"):
+	"""Permite al usuario buscar y seleccionar una parada usando Questionary"""
+	print_header(f"Configuración de Estación de {stop_type.capitalize()}", "🚉")
+
+	search_term = questionary.text(
+	    f"Buscar estación de {stop_type} (nombre):",
+	    validate=lambda text: True
+	    if text.strip() else "La búsqueda no puede estar vacía").ask()
+
+	if not search_term:
+		console.print("[yellow]⚠️ Búsqueda vacía[/yellow]")
+		return None
+
+	with console.status(
+	    f"[cyan]Buscando estaciones que coincidan con '{search_term}'...",
+	    spinner="dots"):
+		matches = search_stop(stops_data, search_term)
+
+	if not matches:
+		console.print(
+		    Panel(
+		        f"[yellow]No se encontraron estaciones que coincidan con '{search_term}'[/yellow]",
+		        border_style="yellow",
+		        title="⚠️ Sin resultados"))
+		return None
+
+	if len(matches) == 1:
+		selected = matches[0]
+		console.print(
+		    Panel(
+		        f"[green]✓ Estación encontrada:[/green] [cyan]{selected['name']}[/cyan] ([yellow]{selected['city']}[/yellow])\n"
+		        f"ID: [magenta]{selected['id']}[/magenta] | Código: [magenta]{selected['stop_code']}[/magenta]",
+		        border_style="green",
+		        title="✅ Estación encontrada"))
+		return selected
+
+	# Crear tabla para mostrar las estaciones
+	table = Table(title=f"Estaciones encontradas ({len(matches)})",
+	              show_header=True,
+	              header_style="cyan")
+	table.add_column("#", style="dim", width=3)
+	table.add_column("Nombre", style="cyan")
+	table.add_column("Ciudad", style="yellow")
+	table.add_column("ID", style="magenta")
+	table.add_column("Código", style="magenta")
+
+	for i, match in enumerate(matches, 1):
+		table.add_row(str(i), match['name'], match['city'], match['id'],
+		              match['stop_code'])
+
+	console.print(table)
+
+	# Usar questionary para selección
+	choices = [
+	    f"{match['name']} ({match['city']}) - ID: {match['id']}, Código: {match['stop_code']}"
+	    for match in matches
+	]
+
+	selected_text = questionary.select(
+	    f"Selecciona la estación de {stop_type}:", choices=choices).ask()
+
+	# Verificar si el usuario canceló la selección
+	if selected_text is None:
+		console.print("[yellow]⚠️ Selección cancelada por el usuario[/yellow]")
+		return None
+
+	# Extraer el índice de la selección
+	selected_index = choices.index(selected_text)
+	return matches[selected_index]
+
 
 def get_schedule():
-    print_header("Configuración de Horarios")
-    
-    schedules = {
-        'outward': {'default': None},
-        'return': {'monday': None, 'tuesday': None, 'wednesday': None, 'thursday': None, 'friday': None}
-    }
-    
-    print("Horarios de IDA:")
-    schedules['outward']['default'] = input("Hora por defecto (HH:MM): ")
-    
-    for day in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']:
-        day_names = {
-            'monday': 'lunes',
-            'tuesday': 'martes',
-            'wednesday': 'miércoles',
-            'thursday': 'jueves',
-            'friday': 'viernes'
-        }
-        custom = input(f"Hora específica para {day_names[day]} (Enter para usar default): ")
-        if custom:
-            schedules['outward'][day] = custom
-    
-    print("\nHorarios de VUELTA:")
-    default_return = input("Hora por defecto para vuelta (HH:MM, Enter para configurar por día): ")
-    if default_return:
-        schedules['return']['default'] = default_return
-    
-    for day in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']:
-        if schedules['return'][day] is None:  # Si no hay default o se necesita específico
-            custom = input(f"Hora para {day_names[day]} (HH:MM): ")
-            schedules['return'][day] = custom or schedules['return'].get('default', '')
-    
-    # Minutos de antelación para notificaciones
-    print("\nConfiguración de notificaciones:")
-    advance = input("Minutos de antelación para notificar (default: 75): ") or "75"
-    schedules['notification_advance'] = advance
-    
-    return schedules
+	print_header("Configuración de Horarios", "⏰")
 
-def get_trip_ids(session, origin_id, dest_id, schedules, origin_name, dest_name):
-    """Obtiene los IDs de los viajes."""
-    print_header("Obteniendo IDs de viajes")
-    print("Este proceso puede tardar unos minutos...")
-    
-    trip_ids = {
-        'outward': {},
-        'return': {}
-    }
-    
-    # Inicializar sesión
-    r = session.get(f"{BASE_URL}/en/routes")
-    if r.status_code == 200:
-        soup = BeautifulSoup(r.text, 'html.parser')
-        csrf_meta = soup.find('meta', {'name': 'csrf-token'})
-        if csrf_meta and csrf_meta.get('content'):
-            session.headers.update({
-                'X-CSRF-TOKEN': csrf_meta['content'],
-                'X-XSRF-TOKEN': session.cookies.get('XSRF-TOKEN', ''),
-                'Accept': 'application/json, text/plain, */*',
-                'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
-                'Connection': 'keep-alive',
-                'Content-Type': 'application/json',
-                'Origin': BASE_URL,
-                'Referer': f"{BASE_URL}/en/routes",
-                'Sec-Fetch-Dest': 'empty',
-                'Sec-Fetch-Mode': 'cors',
-                'Sec-Fetch-Site': 'same-origin',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            })
-    
-    # Probar hasta 2 días consecutivos
-    for day_offset in range(2):
-        search_date = datetime.now(pytz.timezone('Europe/Madrid')) + timedelta(days=1+day_offset)
-        
-        # Solo probar días laborables
-        if search_date.strftime('%A').lower() in ['saturday', 'sunday']:
-            continue
-            
-        print(f"\nProbando fecha: {search_date.strftime('%d/%m/%Y')}")
-        
-        date_str = search_date.strftime("%d/%m/%Y")
-        date_str_hyphen = search_date.strftime("%d-%m-%Y")
-        
-        try:
-            # Para cada dirección (ida/vuelta)
-            for direction in ['outward', 'return']:
-                print(f"\nBuscando viajes de {'ida' if direction == 'outward' else 'vuelta'}...")
-                
-                # Configurar origen/destino según dirección
-                from_id = origin_id if direction == 'outward' else dest_id
-                to_id = dest_id if direction == 'outward' else origin_id
-                from_name = origin_name if direction == 'outward' else dest_name
-                to_name = dest_name if direction == 'outward' else origin_name
-                
-                print(f"De: {from_name} ({from_id}) a {to_name} ({to_id})")
+	schedules = {
+	    'outward': {
+	        'default': None
+	    },
+	    'return': {
+	        'monday': None,
+	        'tuesday': None,
+	        'wednesday': None,
+	        'thursday': None,
+	        'friday': None
+	    }
+	}
 
-                # Construir URL de rutas
-                rutas_params = {
-                    'ts': int(time.time() * 1000),
-                    'filter_pmrsr': '0',
-                    'filter_open_return': '0',
-                    'enterprise_slug': '',
-                    'is_round_trip_same_day': 'false',
-                    'filter_from': from_id,
-                    'filter_from_name': from_name,
-                    'filter_to': to_id,
-                    'filter_to_name': to_name,
-                    'filter_departure': date_str,
-                    'filter_arrival': '',
-                    'filter_adult': '1',
-                    'filter_child': '0',
-                    'filter_child_without_seat': '0',
-                }
-                
-                rutas_url = f"{BASE_URL}/en/routes?" + "&".join([f"{k}={quote(str(v))}" for k, v in rutas_params.items()])
-                
-                rutas_headers = {
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                    'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
-                    'Cache-Control': 'max-age=0',
-                    'Connection': 'keep-alive',
-                    'Sec-Fetch-Dest': 'document',
-                    'Sec-Fetch-Mode': 'navigate',
-                    'Sec-Fetch-Site': 'same-origin',
-                    'Sec-Fetch-User': '?1',
-                    'Upgrade-Insecure-Requests': '1',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36'
-                }
-                
-                r = session.get(
-                    rutas_url,
-                    headers=rutas_headers,
-                    cookies=session.cookies
-                )
-                print(f"GET /routes status: {r.status_code}")
-                
-                if r.status_code != 200:
-                    print(f"Error al obtener página de rutas: {r.status_code}")
-                    continue
+	# Define day_names at function scope so it's available to all loops
+	day_names = {
+	    'monday': 'lunes',
+	    'tuesday': 'martes',
+	    'wednesday': 'miércoles',
+	    'thursday': 'jueves',
+	    'friday': 'viernes'
+	}
 
-                # Extraer CSRF token
-                soup = BeautifulSoup(r.text, 'html.parser')
-                csrf_meta = soup.find('meta', {'name': 'csrf-token'})
-                if not csrf_meta:
-                    print("No se encontró CSRF token en página de rutas")
-                    continue
+	console.print(Panel("[cyan]Horarios de IDA[/cyan]", border_style="cyan"))
+	schedules['outward']['default'] = questionary.text(
+	    "Hora por defecto (HH:MM):",
+	    validate=lambda text: True if not text or validate_time_format(
+	        text) else "Formato inválido. Usa HH:MM").ask() or None
 
-                csrf_token = csrf_meta['content']
-                
-                # Preparar datos para la petición de viajes
-                boundary = f'----WebKitFormBoundary{secrets.token_hex(8)}'
-                
-                form_data = {
-                    'date': date_str_hyphen,
-                    'from': from_id,
-                    'to': to_id,
-                    'pmrsr': '0',
-                    'locale': 'en',
-                    'operation_type_id': '0',
-                    'going_date': date_str,
-                    'adults_num': '1',
-                    'childs_num': '0',
-                    'childs_without_seat_num': '0',
-                    'enterprise_slug': ''
-                }
+	for day in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']:
+		custom = questionary.text(
+		    f"Hora específica para {day_names[day]} (Enter para usar default):",
+		    validate=lambda text: True if not text or validate_time_format(
+		        text) else "Formato inválido. Usa HH:MM").ask()
+		if custom:
+			schedules['outward'][day] = custom
 
-                # Codificar los datos del formulario con el boundary correcto
-                body, content_type = encode_multipart_formdata(form_data, boundary=boundary)
+	console.print()
+	console.print(Panel("[cyan]Horarios de VUELTA[/cyan]",
+	                    border_style="cyan"))
+	default_return = questionary.text(
+	    "Hora por defecto para vuelta (HH:MM, Enter para configurar por día):",
+	    validate=lambda text: True if not text or validate_time_format(
+	        text) else "Formato inválido. Usa HH:MM").ask()
 
-                headers = {
-                    'Accept': 'application/json, text/plain, */*',
-                    'Content-Type': content_type,
-                    'Origin': BASE_URL,
-                    'Referer': rutas_url,
-                    'X-CSRF-TOKEN': csrf_token,
-                    'X-XSRF-TOKEN': session.cookies.get('XSRF-TOKEN', ''),
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
+	if default_return:
+		schedules['return']['default'] = default_return
 
-                print("Buscando IDs de viajes...")
+	for day in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']:
+		if schedules['return'][day] is None:
+			if schedules['return'].get('default'):
+				custom = questionary.text(
+				    f"Hora para {day_names[day]} (HH:MM, Enter para usar default {schedules['return']['default']}):",
+				    validate=lambda text: True
+				    if not text or validate_time_format(
+				        text) else "Formato inválido. Usa HH:MM").ask()
+				if custom:
+					schedules['return'][day] = custom
+			else:
+				custom = questionary.text(
+				    f"Hora para {day_names[day]} (HH:MM, requerido):",
+				    validate=lambda text: validate_time_format(text)
+				    if text else "Este campo es requerido").ask()
+				schedules['return'][day] = custom
 
-                r = session.post(
-                    f"{BASE_URL}/route/trips",
-                    data=body,
-                    headers=headers,
-                    cookies=session.cookies
-                )
-                
-                print(f"POST /route/trips status: {r.status_code}")
-                    
-                try:
-                    response = r.json()
-                    if response.get('error'):
-                        print("Error en la respuesta:", response.get('message', 'Unknown error'))
-                        continue
-                        
-                    # Si encontramos viajes, procesar y salir del bucle de días
-                    if response.get('result'):
-                        print(f"Viajes encontrados para {date_str}")
-                        
-                        # Procesar los viajes
-                        for trip in response.get('result', []):
-                            departure_time = trip.get('departure_time')
-                            
-                            # Extraer el ID del viaje (ahora es solo el ID numérico)
-                            trip_id = str(trip.get('id'))
-                            
-                            print(f"- Viaje encontrado: {departure_time}, ID: {trip_id}")
-                            
-                            # Guardar ID según la hora
-                            if direction == 'outward':
-                                if departure_time == schedules['outward']['default']:
-                                    trip_ids['outward']['default'] = trip_id
-                                    print(f"  > Asignado como ida default")
-                                
-                                # Buscar coincidencias con horarios específicos
-                                for day in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']:
-                                    if day in schedules['outward'] and schedules['outward'][day] == departure_time:
-                                        trip_ids['outward'][day] = trip_id
-                                        print(f"  > Asignado como ida para {day}")
-                            else:
-                                if 'default' in schedules['return'] and departure_time == schedules['return']['default']:
-                                    trip_ids['return']['default'] = trip_id
-                                    print(f"  > Asignado como vuelta default")
-                                
-                                # Buscar coincidencias con horarios específicos
-                                for day in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']:
-                                    if day in schedules['return'] and schedules['return'][day] == departure_time:
-                                        trip_ids['return'][day] = trip_id
-                                        print(f"  > Asignado como vuelta para {day}")
-                        
-                        # Si encontramos todos los IDs necesarios, salir
-                        found_all = True
-                        
-                        # Verificar IDs de ida
-                        if schedules['outward']['default'] and 'default' not in trip_ids['outward']:
-                            print(f"No se encontró ID para ida default ({schedules['outward']['default']})")
-                            found_all = False
-                        
-                        # Verificar IDs de vuelta para cada día
-                        for day in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']:
-                            if schedules['return'][day] and day not in trip_ids['return'] and 'default' not in trip_ids['return']:
-                                print(f"No se encontró ID para vuelta de {day} ({schedules['return'][day]})")
-                                found_all = False
-                        
-                        if found_all:
-                            print("Se encontraron todos los IDs necesarios")
-                            return trip_ids
-                            
-                except json.JSONDecodeError:
-                    print("Error al decodificar respuesta JSON")
-                    continue
-                    
-        except Exception as e:
-            print(f"Error al obtener IDs de viajes: {e}")
-            continue
-            
-    # Si llegamos aquí es que no encontramos todos los IDs necesarios
-    print("\nAdvertencia: No se encontraron todos los IDs de viajes necesarios")
-    
-    # Permitir introducción manual de IDs no encontrados
-    print_header("Introducción manual de IDs")
-    print("Para los horarios que no se encontraron automáticamente, puedes introducir los IDs manualmente.")
-    print("Si no conoces el ID, deja en blanco y luego deberás editarlo en el archivo .env")
-    
-    # IDs de ida
-    if schedules['outward']['default'] and 'default' not in trip_ids['outward']:
-        trip_ids['outward']['default'] = input(f"ID para ida default ({schedules['outward']['default']}): ")
-    
-    # IDs específicos de ida por día
-    for day in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']:
-        if day in schedules['outward'] and schedules['outward'][day] and day not in trip_ids['outward']:
-            trip_ids['outward'][day] = input(f"ID para ida de {day} ({schedules['outward'][day]}): ")
-    
-    # ID de vuelta default
-    if 'default' in schedules['return'] and schedules['return']['default'] and 'default' not in trip_ids['return']:
-        trip_ids['return']['default'] = input(f"ID para vuelta default ({schedules['return']['default']}): ")
-    
-    # IDs específicos de vuelta por día
-    for day in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']:
-        if schedules['return'][day] and day not in trip_ids['return'] and 'default' not in trip_ids['return']:
-            trip_ids['return'][day] = input(f"ID para vuelta de {day} ({schedules['return'][day]}): ")
-    
-    return trip_ids
+	# Minutos de antelación para notificaciones
+	console.print()
+	console.print(
+	    Panel("[cyan]Configuración de notificaciones[/cyan]",
+	          border_style="cyan"))
+	advance = questionary.text(
+	    "Minutos de antelación para notificar (default: 75):",
+	    default="75",
+	    validate=lambda text: True
+	    if not text or text.isdigit() else "Debe ser un número").ask() or "75"
+	schedules['notification_advance'] = advance
 
-def get_bonus_id(session):
-    """Obtiene el ID del bono gratuito."""
-    print("\nObteniendo ID del bono gratuito...")
-    
-    try:
-        r = session.get(f"{BASE_URL}/en/free-bonus-movements")
-        if r.status_code != 200:
-            print("Error al acceder a la página de bonos")
-            return None
-            
-        soup = BeautifulSoup(r.text, 'html.parser')
-        
-        # Buscar la tabla principal
-        table = soup.find('table', class_='table table-bordered')
-        if not table:
-            print("No se encontró la tabla de bonos")
-            return None
-            
-        # Buscar todas las filas excepto el encabezado
-        rows = table.find_all('tr')
-        if not rows:
-            print("No se encontraron filas en la tabla")
-            return None
-            
-        bonuses = []
-        for row in rows:
-            # Saltar la fila del título
-            if 'tableTitleRow' in row.get('class', []):
-                continue
-                
-            try:
-                # Buscar la columna del ID (segunda columna)
-                cols = row.find_all('td')
-                if len(cols) < 7:
-                    continue
-                    
-                id_col = cols[1]
-                if not id_col:
-                    continue
-                    
-                # Obtener el ID (está en el primer texto antes del <br>)
-                bonus_id = id_col.get_text().strip().split('\n')[0]
-                
-                # Buscar la columna de estado (séptima columna)
-                status_col = cols[6]
-                if not status_col:
-                    continue
-                    
-                # Buscar el div con el texto "Active" o "Activo"
-                status_text = status_col.get_text().strip()
-                if "Active" in status_text or "Activo" in status_text:
-                    # Quitar ceros iniciales
-                    bonus_id = bonus_id.lstrip('0')
-                    print(f"Bono activo encontrado: {bonus_id}")
-                    bonuses.append(bonus_id)
-                    
-            except Exception as e:
-                print(f"Error procesando fila: {e}")
-                continue
-        
-        if bonuses:
-            if len(bonuses) > 1:
-                print("\nSe encontraron varios bonos activos:")
-                for i, bonus_id in enumerate(bonuses):
-                    print(f"{i+1}. {bonus_id}")
-                
-                choice = input("\nSelecciona el número del bono que quieres usar: ")
-                try:
-                    index = int(choice) - 1
-                    if 0 <= index < len(bonuses):
-                        return bonuses[index]
-                    else:
-                        print("Selección inválida")
-                        return None
-                except ValueError:
-                    print("Selección inválida")
-                    return None
-            else:
-                return bonuses[0]
-        
-        print("No se encontró ningún bono activo")
-        manual_bonus = input("Introduce manualmente el ID del bono (o deja en blanco para configurarlo después): ")
-        return manual_bonus if manual_bonus else None
-        
-    except Exception as e:
-        print(f"Error al obtener ID del bono: {e}")
-        manual_bonus = input("Introduce manualmente el ID del bono (o deja en blanco para configurarlo después): ")
-        return manual_bonus if manual_bonus else None
+	return schedules
+
 
 def generate_env_file(config):
-    """Genera el archivo .env con la configuración obtenida."""
-    # Mapeo de días de la semana para variables de entorno
-    day_map = {
-        'monday': 'MONDAY',
-        'tuesday': 'TUESDAY',
-        'wednesday': 'WEDNESDAY',
-        'thursday': 'THURSDAY',
-        'friday': 'FRIDAY'
-    }
-    
-    env_content = f"""# Token de acceso del bot de Telegram
+	"""Genera el archivo .env con la configuración obtenida."""
+	# Mapeo de días de la semana para variables de entorno
+	day_map = {
+	    'monday': 'MONDAY',
+	    'tuesday': 'TUESDAY',
+	    'wednesday': 'WEDNESDAY',
+	    'thursday': 'THURSDAY',
+	    'friday': 'FRIDAY'
+	}
+
+	env_content = f"""# ============================================
+# CONFIGURACIÓN DE TELEGRAM
+# ============================================
+# Token de acceso del bot de Telegram
 TELEGRAM_TOKEN={config['telegram_token']}
 
 # ID del usuario autorizado en Telegram
 TELEGRAM_USER_ID={config['telegram_user_id']}
 
-# Credenciales de inicio de sesión en HIFE
-HIFE_EMAIL={config['hife_email']}
-HIFE_PASSWORD={config['hife_password']}
+# ============================================
+# CONFIGURACIÓN DE HIFE API
+# ============================================
+# URL base de la API de HIFE (normalmente no cambiar)
+HIFE_API_URL=https://middleware.hife.es/api
 
-# Estación de origen
+# Token JWT de autenticación (obtener de los logs de la app móvil)
+HIFE_AUTH_TOKEN={config.get('hife_auth_token', '')}
+
+# Client ID de HIFE (normalmente 33798)
+HIFE_CLIENT_ID=33798
+
+# Versión de la app (normalmente 2.0.8)
+HIFE_APP_VERSION=2.0.8
+
+# ============================================
+# CONFIGURACIÓN DE ESTACIONES
+# ============================================
+# ID numérico de la estación de origen (sin ceros iniciales)
 ORIGIN_ID={config['origin_id']}
+
+# Código de parada de origen (con ceros iniciales, ej: 0012)
+ORIGIN_STOP_CODE={config.get('origin_stop_code', config['origin_id'].zfill(4))}
+
+# Nombre de la estación de origen
 ORIGIN_NAME={config['origin_name']}
 
-# Estación de destino
+# ID numérico de la estación de destino (sin ceros iniciales)
 DESTINATION_ID={config['destination_id']}
+
+# Código de parada de destino (con ceros iniciales, ej: 0007)
+DESTINATION_STOP_CODE={config.get('destination_stop_code', config['destination_id'].zfill(4))}
+
+# Nombre de la estación de destino
 DESTINATION_NAME={config['destination_name']}
 
 # ====== HORARIOS DE IDA ======
 """
-    
-    # Añadir hora por defecto para ida
-    if 'outward' in config['schedules'] and 'default' in config['schedules']['outward']:
-        env_content += f"OUTWARD_TIME_DEFAULT={config['schedules']['outward']['default']}\n"
-    else:
-        env_content += "OUTWARD_TIME_DEFAULT=\n"
-        
-    # Añadir horas específicas por día para ida
-    for day in day_map:
-        if 'outward' in config['schedules'] and day in config['schedules']['outward']:
-            env_content += f"OUTWARD_TIME_{day_map[day]}={config['schedules']['outward'][day]}\n"
-        else:
-            env_content += f"OUTWARD_TIME_{day_map[day]}=\n"
-    
-    env_content += "\n# ====== HORARIOS DE VUELTA ======\n"
-    
-    # Añadir hora por defecto para vuelta
-    if 'return' in config['schedules'] and 'default' in config['schedules']['return']:
-        env_content += f"RETURN_TIME_DEFAULT={config['schedules']['return']['default']}\n"
-    else:
-        env_content += "RETURN_TIME_DEFAULT=\n"
-        
-    # Añadir horas específicas por día para vuelta
-    for day in day_map:
-        if 'return' in config['schedules'] and day in config['schedules']['return']:
-            env_content += f"RETURN_TIME_{day_map[day]}={config['schedules']['return'][day]}\n"
-        else:
-            env_content += f"RETURN_TIME_{day_map[day]}=\n"
-    
-    # Añadir IDs de trayectos
-    if 'trip_ids' in config and config['trip_ids']:
-        env_content += "\n# ====== IDs DE TRAYECTOS ======\n"
-        
-        # IDs para ida
-        if 'outward' in config['trip_ids']:
-            if 'default' in config['trip_ids']['outward']:
-                env_content += f"OUTWARD_TRIP_ID_DEFAULT={config['trip_ids']['outward']['default']}\n"
-                
-            for day in day_map:
-                if day in config['trip_ids']['outward']:
-                    env_content += f"OUTWARD_TRIP_ID_{day_map[day]}={config['trip_ids']['outward'][day]}\n"
-        
-        # IDs para vuelta
-        if 'return' in config['trip_ids']:
-            if 'default' in config['trip_ids']['return']:
-                env_content += f"RETURN_TRIP_ID_DEFAULT={config['trip_ids']['return']['default']}\n"
-                
-            for day in day_map:
-                if day in config['trip_ids']['return']:
-                    env_content += f"RETURN_TRIP_ID_{day_map[day]}={config['trip_ids']['return'][day]}\n"
-    
-    # Añadir minutos de antelación para notificaciones
-    env_content += "\n# Minutos de antelación para notificar antes del viaje\n"
-    env_content += f"NOTIFICATION_ADVANCE={config['schedules'].get('notification_advance', '75')}\n"
-    
-    # Añadir ID de bono
-    env_content += "\n# ID numérico del bono de transporte a utilizar\n"
-    env_content += f"BONUS_ID={config['bonus_id']}\n"
-    
-    with open('.env', 'w') as f:
-        f.write(env_content)
-    
-    print("Archivo .env generado correctamente")
-    print("\nSugerencia: si necesitas ajustar algún valor, edita directamente el archivo .env")
+
+	# Añadir hora por defecto para ida
+	if 'outward' in config['schedules'] and 'default' in config['schedules'][
+	    'outward']:
+		env_content += f"OUTWARD_TIME_DEFAULT={config['schedules']['outward']['default']}\n"
+	else:
+		env_content += "OUTWARD_TIME_DEFAULT=\n"
+
+	# Añadir horas específicas por día para ida
+	for day in day_map:
+		if 'outward' in config['schedules'] and day in config['schedules'][
+		    'outward']:
+			env_content += f"OUTWARD_TIME_{day_map[day]}={config['schedules']['outward'][day]}\n"
+		else:
+			env_content += f"OUTWARD_TIME_{day_map[day]}=\n"
+
+	env_content += "\n# ====== HORARIOS DE VUELTA ======\n"
+
+	# Añadir hora por defecto para vuelta
+	if 'return' in config['schedules'] and 'default' in config['schedules'][
+	    'return']:
+		env_content += f"RETURN_TIME_DEFAULT={config['schedules']['return']['default']}\n"
+	else:
+		env_content += "RETURN_TIME_DEFAULT=\n"
+
+	# Añadir horas específicas por día para vuelta
+	for day in day_map:
+		if 'return' in config['schedules'] and day in config['schedules'][
+		    'return']:
+			env_content += f"RETURN_TIME_{day_map[day]}={config['schedules']['return'][day]}\n"
+		else:
+			env_content += f"RETURN_TIME_{day_map[day]}=\n"
+
+	# Añadir IDs de trayectos
+	if 'trip_ids' in config and config['trip_ids']:
+		env_content += "\n# ====== IDs DE TRAYECTOS ======\n"
+
+		# IDs para ida
+		if 'outward' in config['trip_ids']:
+			if 'default' in config['trip_ids']['outward']:
+				env_content += f"OUTWARD_TRIP_ID_DEFAULT={config['trip_ids']['outward']['default']}\n"
+
+			for day in day_map:
+				if day in config['trip_ids']['outward']:
+					env_content += f"OUTWARD_TRIP_ID_{day_map[day]}={config['trip_ids']['outward'][day]}\n"
+
+		# IDs para vuelta
+		if 'return' in config['trip_ids']:
+			if 'default' in config['trip_ids']['return']:
+				env_content += f"RETURN_TRIP_ID_DEFAULT={config['trip_ids']['return']['default']}\n"
+
+			for day in day_map:
+				if day in config['trip_ids']['return']:
+					env_content += f"RETURN_TRIP_ID_{day_map[day]}={config['trip_ids']['return'][day]}\n"
+
+	# Añadir ID de bono
+	env_content += "\n# ============================================\n"
+	env_content += "# CONFIGURACIÓN DE BONO\n"
+	env_content += "# ============================================\n"
+	env_content += "# ID del bono a utilizar (19 = MITMA Joven, pero puede variar)\n"
+	env_content += f"BONUS_ID={config.get('bonus_id', '19')}\n"
+
+	# Añadir minutos de antelación para notificaciones
+	env_content += "\n# ============================================\n"
+	env_content += "# CONFIGURACIÓN DE NOTIFICACIONES\n"
+	env_content += "# ============================================\n"
+	env_content += "# Minutos de antelación para notificar antes del viaje (default: 120 = 2 horas)\n"
+	env_content += f"NOTIFICATION_ADVANCE_MINUTES={config['schedules'].get('notification_advance', '120')}\n"
+
+	# Intervalo de revisión
+	env_content += "\n# Intervalo en minutos para revisar horarios (default: 10)\n"
+	env_content += "CHECK_INTERVAL_MINUTES=10\n"
+
+	with open('.env', 'w', encoding='utf-8') as f:
+		f.write(env_content)
+
+	console.print()
+	console.print(
+	    Panel(
+	        "[green]✅ Archivo .env generado correctamente[/green]\n\n"
+	        "[yellow]💡 Sugerencia:[/yellow] Si necesitas ajustar algún valor, edita directamente el archivo .env",
+	        border_style="green",
+	        title="✅ Archivo generado"))
+
+
+def show_summary(config):
+	"""Muestra un resumen de la configuración antes de guardar"""
+	summary_table = Table(title="Resumen de Configuración",
+	                      show_header=True,
+	                      header_style="cyan")
+	summary_table.add_column("Parámetro", style="cyan")
+	summary_table.add_column("Valor", style="green")
+
+	summary_table.add_row(
+	    "Token Telegram", config['telegram_token'][:20] + "..."
+	    if len(config['telegram_token']) > 20 else config['telegram_token'])
+	summary_table.add_row("ID Usuario Telegram", config['telegram_user_id'])
+	summary_table.add_row(
+	    "Estación Origen",
+	    f"{config['origin_name']} (ID: {config['origin_id']})")
+	summary_table.add_row(
+	    "Estación Destino",
+	    f"{config['destination_name']} (ID: {config['destination_id']})")
+
+	# Mostrar bono con nombre si está disponible
+	bonus_id = config.get('bonus_id', '19')
+	bonus_name = config.get('bonus_name', '')
+	if bonus_name:
+		summary_table.add_row("Bono", f"{bonus_name} (ID: {bonus_id})")
+	else:
+		summary_table.add_row("Bono ID", bonus_id)
+	summary_table.add_row(
+	    "Antelación Notificación",
+	    f"{config['schedules'].get('notification_advance', '75')} minutos")
+
+	console.print()
+	console.print(summary_table)
+
 
 def main():
-    print_header("Asistente de configuración de HIFE Bot")
-    print("Bienvenido al asistente de configuración. Este programa te ayudará a configurar el bot para comprar billetes en HIFE.es automáticamente.")
-    
-    print("\n⚠️ IMPORTANTE: Este bot está diseñado para funcionar EXCLUSIVAMENTE con cuentas de HIFE configuradas en inglés.")
-    print("Por favor, asegúrate de que tu cuenta de HIFE.es está configurada en inglés antes de continuar.")
-    print("Para cambiar el idioma de tu cuenta HIFE, inicia sesión y selecciona 'English' en el selector de idioma.")
-    
-    config = {}
-    
-    # 1. Obtener información de Telegram
-    config['telegram_token'], config['telegram_user_id'] = get_telegram_info()
-    
-    # 2. Obtener credenciales de HIFE
-    config['hife_email'], config['hife_password'] = get_hife_credentials()
-    
-    # 3. Iniciar sesión y mantener la sesión para todas las peticiones
-    session = requests.Session()
-    session.headers.update(HEADERS)  # Establecer headers base
-    
-    if not login_hife(session, config['hife_email'], config['hife_password']):
-        print("Error al iniciar sesión en HIFE")
-        return
-    
-    # 4. Obtener información de estaciones
-    origin_name, dest_name = get_stations()
-    
-    # 5. Obtener IDs de estaciones usando la misma sesión
-    origin_id, dest_id = get_station_ids(session, origin_name, dest_name)
-    if not origin_id or not dest_id:
-        print("Error al obtener IDs de estaciones")
-        return
-        
-    config['origin_id'] = origin_id
-    config['destination_id'] = dest_id
-    config['origin_name'] = origin_name
-    config['destination_name'] = dest_name
-    
-    # 6. Configurar horarios
-    config['schedules'] = get_schedule()
-    
-    # 7. Obtener IDs de viajes usando la misma sesión
-    config['trip_ids'] = get_trip_ids(session, origin_id, dest_id, config['schedules'], origin_name, dest_name)
-    if not config['trip_ids']:
-        print("Error al obtener IDs de viajes")
-        return
-    
-    # 8. Obtener ID del bono usando la misma sesión
-    config['bonus_id'] = get_bonus_id(session)
-    if not config['bonus_id']:
-        print("Advertencia: No se pudo obtener ID del bono. Tendrás que configurarlo manualmente en el archivo .env")
-        config['bonus_id'] = ""
-    
-    # 9. Generar archivo .env
-    generate_env_file(config)
-    
-    print("\n¡Configuración completada!")
-    print("\nPara ejecutar el bot, usa: python main.py")
-    print("\nEl bot enviará notificaciones a través de Telegram para preguntar si quieres comprar billetes.")
+	console.print()
+	console.print(
+	    Panel.fit(
+	        "[bold cyan]HIFE BOT[/bold cyan]\n"
+	        "[yellow]Asistente de configuración[/yellow]\n\n"
+	        "Este programa te ayudará a configurar el bot para comprar billetes\n"
+	        "en HIFE.es automáticamente.",
+	        border_style="cyan",
+	        title="🚀 Bienvenido"))
+
+	config = {}
+
+	# 1. Obtener información de Telegram
+	config['telegram_token'], config['telegram_user_id'] = get_telegram_info()
+
+	# 2. Obtener token JWT de HIFE
+	config['hife_auth_token'] = get_jwt_token()
+	if not config['hife_auth_token']:
+		console.print()
+		console.print(
+		    Panel(
+		        "[red]❌ No se pudo obtener el token de acceso. El proceso se detiene.[/red]",
+		        border_style="red",
+		        title="❌ Error"))
+		return
+
+	# 3. Obtener paradas de la API
+	stops_data = get_stops_from_api(config['hife_auth_token'])
+	if not stops_data:
+		console.print()
+		console.print(
+		    Panel(
+		        "[yellow]⚠️ No se pudieron obtener las paradas de la API.[/yellow]\n"
+		        "Puedes introducir la información manualmente:",
+		        border_style="yellow",
+		        title="⚠️ Advertencia"))
+		origin_name = questionary.text(
+		    "Nombre de la estación de origen:").ask()
+		origin_id = questionary.text(
+		    "ID de la estación de origen (sin ceros iniciales):").ask()
+		origin_stop_code = questionary.text(
+		    f"Código de parada de origen (default: {origin_id.zfill(4) if origin_id else '0012'}):"
+		).ask()
+
+		dest_name = questionary.text("Nombre de la estación de destino:").ask()
+		dest_id = questionary.text(
+		    "ID de la estación de destino (sin ceros iniciales):").ask()
+		dest_stop_code = questionary.text(
+		    f"Código de parada de destino (default: {dest_id.zfill(4) if dest_id else '0007'}):"
+		).ask()
+
+		config['origin_id'] = origin_id
+		config[
+		    'origin_stop_code'] = origin_stop_code if origin_stop_code else (
+		        origin_id.zfill(4) if origin_id else '0012')
+		config['origin_name'] = origin_name
+		config['destination_id'] = dest_id
+		config[
+		    'destination_stop_code'] = dest_stop_code if dest_stop_code else (
+		        dest_id.zfill(4) if dest_id else '0007')
+		config['destination_name'] = dest_name
+	else:
+		# Seleccionar estación de origen
+		origin_stop = select_stop(stops_data, "origen")
+		if not origin_stop:
+			console.print(
+			    Panel(
+			        "[red]Error: No se seleccionó una estación de origen[/red]",
+			        border_style="red",
+			        title="❌ Error"))
+			return
+
+		config['origin_id'] = origin_stop['id']
+		config['origin_stop_code'] = origin_stop['stop_code']
+		config['origin_name'] = origin_stop['name']
+
+		# Seleccionar estación de destino
+		dest_stop = select_stop(stops_data, "destino")
+		if not dest_stop:
+			console.print(
+			    Panel(
+			        "[red]Error: No se seleccionó una estación de destino[/red]",
+			        border_style="red",
+			        title="❌ Error"))
+			return
+
+		config['destination_id'] = dest_stop['id']
+		config['destination_stop_code'] = dest_stop['stop_code']
+		config['destination_name'] = dest_stop['name']
+
+	# 4. Configurar horarios
+	config['schedules'] = get_schedule()
+
+	# 5. Configurar bono
+	print_header("Configuración de Bono", "🎫")
+
+	# Obtener bonos disponibles y activos de la API
+	bonuses_data = get_available_bonuses(config['hife_auth_token'])
+
+	if bonuses_data and bonuses_data.get('available') and len(
+	    bonuses_data['available']) > 0:
+		available_bonuses = bonuses_data['available']
+		active_bonus = bonuses_data.get('active')
+
+		# Mostrar información del bono activo si existe
+		if active_bonus:
+			status_text = "[green]✓ Activo[/green]" if not active_bonus[
+			    'expired'] else "[red]✗ Expirado[/red]"
+			funds_info = f"{active_bonus['current_funds_amount']}/{active_bonus['initial_funds_amount']}"
+			active_panel = Panel(
+			    f"[cyan]Bono activo detectado:[/cyan]\n"
+			    f"Nombre: [yellow]{active_bonus['bonus_name']}[/yellow]\n"
+			    f"Tipo ID: [magenta]{active_bonus['bonus_type_id']}[/magenta]\n"
+			    f"Estado: {status_text}\n"
+			    f"Fondos: [cyan]{funds_info}[/cyan]",
+			    border_style="green"
+			    if not active_bonus['expired'] else "yellow",
+			    title="🎫 Bono Activo")
+			console.print(active_panel)
+			console.print()
+
+		# Crear tabla para mostrar los bonos disponibles
+		bonus_table = Table(title="Bonos disponibles",
+		                    show_header=True,
+		                    header_style="cyan")
+		bonus_table.add_column("ID", style="magenta", width=5)
+		bonus_table.add_column("Nombre", style="cyan")
+		bonus_table.add_column("Código", style="yellow", width=10)
+		bonus_table.add_column("Estado", style="green", width=12)
+
+		# Preparar opciones para questionary
+		bonus_choices = []
+		for bonus in available_bonuses:
+			bonus_id = str(bonus.get('id', ''))
+			bonus_name = bonus.get('current_language',
+			                       {}).get('name',
+			                               bonus.get('name', 'Sin nombre'))
+			bonus_code = bonus.get('external_bonus_code', '')
+
+			# Verificar si este bono es el activo
+			is_active = active_bonus and str(
+			    active_bonus['bonus_type_id']) == bonus_id
+			status = "[green]✓ Activo[/green]" if is_active else ""
+
+			bonus_table.add_row(bonus_id, bonus_name, bonus_code, status)
+
+			# Marcar el bono activo en las opciones
+			choice_text = f"{bonus_id} - {bonus_name} (Código: {bonus_code})"
+			if is_active:
+				choice_text = f"⭐ {choice_text} [ACTIVO]"
+			bonus_choices.append(choice_text)
+
+		console.print(bonus_table)
+		console.print()
+
+		# Permitir seleccionar o ingresar manualmente
+		selected_bonus = questionary.select("Selecciona el bono a utilizar:",
+		                                    choices=bonus_choices +
+		                                    ["Ingresar ID manualmente"]).ask()
+
+		# Verificar si el usuario canceló la selección
+		if selected_bonus is None:
+			console.print(
+			    "[yellow]⚠️ Selección cancelada por el usuario[/yellow]")
+			# Usar valor por defecto si se cancela
+			config['bonus_id'] = "19"
+			console.print(
+			    "[cyan]💡[/cyan] Usando bono por defecto: [yellow]MITMA Joven[/yellow] (ID: [magenta]19[/magenta])"
+			)
+
+		if selected_bonus == "Ingresar ID manualmente":
+			bonus_id = questionary.text(
+			    "ID del bono a utilizar:",
+			    validate=lambda text: True
+			    if text.strip() else "El ID no puede estar vacío").ask()
+			config['bonus_id'] = bonus_id
+		else:
+			# Extraer el ID de la selección (formato: "⭐ ID - Nombre (Código: XXX) [ACTIVO]" o "ID - Nombre (Código: XXX)")
+			bonus_id = selected_bonus.replace("⭐ ", "").split(' - ')[0].strip()
+			bonus_name = selected_bonus.split(' - ')[1].split(' (')[0].strip()
+			config['bonus_id'] = bonus_id
+			config['bonus_name'] = bonus_name  # Guardar nombre para el resumen
+			# Mostrar confirmación
+			is_active_selected = active_bonus and str(
+			    active_bonus['bonus_type_id']) == bonus_id
+			active_note = " [ACTIVO]" if is_active_selected else ""
+			console.print(
+			    f"[green]✓[/green] Bono seleccionado: [cyan]{bonus_name}[/cyan] (ID: [magenta]{bonus_id}[/magenta]){active_note}"
+			)
+	else:
+		# Si no se pueden obtener los bonos, usar entrada manual con default
+		console.print(
+		    Panel(
+		        "[yellow]⚠️ No se pudieron obtener los bonos de la API.[/yellow]\n"
+		        "Puedes ingresar el ID del bono manualmente.",
+		        border_style="yellow",
+		        title="⚠️ Advertencia"))
+		# Si hay un bono activo pero no se pudieron obtener los disponibles, sugerir el activo
+		if bonuses_data and bonuses_data.get('active'):
+			active_bonus = bonuses_data['active']
+			suggested_id = str(active_bonus['bonus_type_id'])
+			console.print(
+			    f"[cyan]💡 Sugerencia:[/cyan] Tu bono activo es [yellow]{active_bonus['bonus_name']}[/yellow] (ID: [magenta]{suggested_id}[/magenta])"
+			)
+			bonus_id = questionary.text(
+			    f"ID del bono a utilizar (default: {suggested_id} para tu bono activo):",
+			    default=suggested_id).ask()
+			config['bonus_id'] = bonus_id if bonus_id else suggested_id
+			config['bonus_name'] = active_bonus['bonus_name']
+		else:
+			bonus_id = questionary.text(
+			    "ID del bono a utilizar (default: 19 para MITMA Joven):",
+			    default="19").ask()
+			config['bonus_id'] = bonus_id if bonus_id else "19"
+
+	# Los trip_ids no se obtienen automáticamente, el usuario puede configurarlos después si es necesario
+	config['trip_ids'] = {}
+
+	# Mostrar resumen
+	show_summary(config)
+
+	# Confirmar antes de guardar
+	console.print()
+	if not questionary.confirm("¿Guardar esta configuración?",
+	                           default=True).ask():
+		console.print(
+		    "[yellow]Configuración cancelada por el usuario[/yellow]")
+		return
+
+	# 6. Generar archivo .env
+	generate_env_file(config)
+
+	console.print()
+	console.print(
+	    Panel.fit(
+	        "[green]✅ ¡Configuración completada![/green]\n\n"
+	        "[cyan]📝[/cyan] Se ha generado el archivo .env con tu configuración.\n\n"
+	        "[cyan]🚀[/cyan] Para ejecutar el bot, usa:\n"
+	        "   [yellow]python main.py[/yellow]\n\n"
+	        "[cyan]📱[/cyan] El bot enviará notificaciones a través de Telegram\n"
+	        "   para preguntarte si quieres comprar billetes.\n\n"
+	        "[cyan]💡[/cyan] Si necesitas ajustar algún valor, edita el archivo .env",
+	        border_style="green",
+	        title="✅ Completado"))
+
 
 if __name__ == "__main__":
-    main() 
+	main()

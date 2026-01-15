@@ -1,43 +1,52 @@
-# Archivos sensibles
-.env
-.env.*
-!.env.example
-
-# Archivos de logs
-logs/
-*.log
-bot_output.log
-
-# Archivos de respuesta
-responses/
-*.txt
-
-# Entorno virtual
-venv/
-env/
-ENV/
-
-# Archivos de proceso
-*.pid
-bot.pid
-
-# Caché de Python
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Archivos de distribución
-dist/
+*.so
+.Python
 build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
 *.egg-info/
+.installed.cfg
+*.egg
 
-# Archivos de IDE y editores
-.idea/
+# Virtual Environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
 .vscode/
+.idea/
 *.swp
 *.swo
 *~
-.DS_Store 
+.DS_Store
+
+# Logs
+logs/
+*.log
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Project specific
+responses/
