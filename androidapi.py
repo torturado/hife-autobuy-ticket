@@ -2,6 +2,7 @@ import requests
 import datetime
 import logging
 import asyncio
+import time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CallbackQueryHandler, ContextTypes
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -24,6 +25,10 @@ console = Console()
 # Timeout for all HTTP requests (in seconds)
 # Prevents requests from hanging indefinitely
 REQUEST_TIMEOUT = 10
+
+# Retry configuration for server errors
+MAX_RETRIES = 3
+RETRY_DELAY_BASE = 2  # Base delay in seconds for exponential backoff
 
 
 class HifeAutomator:
@@ -48,36 +53,95 @@ class HifeAutomator:
 		    date_str.replace('-', '/')
 		}
 
-		try:
-			res = requests.get(url,
-			                   headers=self.headers,
-			                   params=params,
-			                   timeout=REQUEST_TIMEOUT)
-			res.raise_for_status()
-			trips = res.json()
+		# Retry logic for server errors (5xx)
+		for attempt in range(MAX_RETRIES):
+			try:
+				res = requests.get(url,
+				                   headers=self.headers,
+				                   params=params,
+				                   timeout=REQUEST_TIMEOUT)
 
-			for trip in trips:
-				if trip.get('departure_time') == target_time:
-					console.print(
-					    f"[green]✓[/green] Viaje encontrado: [cyan]{target_time}[/cyan] -> ID: [magenta]{trip['id']}[/magenta]"
-					)
-					return trip['id']
+				# Handle different HTTP status codes
+				if res.status_code == 500:
+					# Server error - retry with exponential backoff
+					if attempt < MAX_RETRIES - 1:
+						delay = RETRY_DELAY_BASE * (2**attempt)
+						console.print(
+						    f"[yellow]⚠[/yellow] Error 500 del servidor (intento {attempt + 1}/{MAX_RETRIES}). "
+						    f"Reintentando en {delay}s...")
+						logger.warning(
+						    f"Server error 500 al buscar viaje (intento {attempt + 1}/{MAX_RETRIES}): {res.url}"
+						)
+						time.sleep(delay)
+						continue
+					else:
+						# Last attempt failed
+						console.print(
+						    f"[red]✗[/red] Error 500 del servidor después de {MAX_RETRIES} intentos"
+						)
+						logger.error(
+						    f"Server error 500 persistente después de {MAX_RETRIES} intentos: {res.url}"
+						)
+						return {'error': 'server_error', 'status_code': 500}
 
-			console.print(
-			    f"[yellow]⚠[/yellow] No se encontró viaje para [cyan]{target_time}[/cyan] el [cyan]{date_str}[/cyan]"
-			)
-			return None
-		except requests.exceptions.RequestException as e:
-			console.print(
-			    f"[red]✗[/red] Error de red/timeout al buscar viaje: [red]{e}[/red]"
-			)
-			logger.error(f"Request exception al buscar viaje: {e}")
-			return None
-		except Exception as e:
-			console.print(
-			    f"[red]✗[/red] Error al buscar viaje: [red]{e}[/red]")
-			logger.exception("Error inesperado al buscar viaje")
-			return None
+				# Raise for other HTTP errors (4xx, etc.)
+				res.raise_for_status()
+
+				# Success - parse response
+				trips = res.json()
+
+				for trip in trips:
+					if trip.get('departure_time') == target_time:
+						console.print(
+						    f"[green]✓[/green] Viaje encontrado: [cyan]{target_time}[/cyan] -> ID: [magenta]{trip['id']}[/magenta]"
+						)
+						return trip['id']
+
+				# Trip not found in response
+				console.print(
+				    f"[yellow]⚠[/yellow] No se encontró viaje para [cyan]{target_time}[/cyan] el [cyan]{date_str}[/cyan]"
+				)
+				return None
+
+			except requests.exceptions.HTTPError as e:
+				# Handle other HTTP errors (4xx, etc.)
+				status_code = e.response.status_code if hasattr(
+				    e, 'response') and e.response else None
+				console.print(
+				    f"[red]✗[/red] Error HTTP {status_code} al buscar viaje: [red]{e}[/red]"
+				)
+				logger.error(f"HTTP error {status_code} al buscar viaje: {e}")
+				return {'error': 'http_error', 'status_code': status_code}
+
+			except requests.exceptions.Timeout as e:
+				console.print(
+				    f"[red]✗[/red] Timeout al buscar viaje: [red]{e}[/red]")
+				logger.error(f"Timeout al buscar viaje: {e}")
+				return {'error': 'timeout'}
+
+			except requests.exceptions.ConnectionError as e:
+				console.print(
+				    f"[red]✗[/red] Error de conexión al buscar viaje: [red]{e}[/red]"
+				)
+				logger.error(f"Connection error al buscar viaje: {e}")
+				return {'error': 'connection_error'}
+
+			except requests.exceptions.RequestException as e:
+				console.print(
+				    f"[red]✗[/red] Error de red al buscar viaje: [red]{e}[/red]"
+				)
+				logger.error(f"Request exception al buscar viaje: {e}")
+				return {'error': 'request_error'}
+
+			except Exception as e:
+				console.print(
+				    f"[red]✗[/red] Error inesperado al buscar viaje: [red]{e}[/red]"
+				)
+				logger.exception("Error inesperado al buscar viaje")
+				return {'error': 'unknown_error'}
+
+		# Should not reach here, but just in case
+		return {'error': 'max_retries_exceeded'}
 
 	def buy_ticket(self, schedule_id, date_str, trip_type):
 		try:
@@ -316,7 +380,62 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 		origin_name = Config.DESTINATION_NAME or f"Estación {Config.DESTINATION_ID}"
 		dest_name = Config.ORIGIN_NAME or f"Estación {Config.ORIGIN_ID}"
 
-	if schedule_id:
+	# Handle different return types from get_trip_id
+	if isinstance(schedule_id, dict) and 'error' in schedule_id:
+		# Error occurred
+		error_type = schedule_id.get('error')
+		status_code = schedule_id.get('status_code')
+
+		if error_type == 'server_error':
+			error_message = (
+			    f"⚠️ *Error del servidor*\n\n"
+			    f"📅 Fecha: {date_formatted}\n"
+			    f"⏰ Hora solicitada: {t_time}\n"
+			    f"🎫 Tipo: {t_type.capitalize()}\n\n"
+			    f"El servidor de HIFE está experimentando problemas temporales.\n\n"
+			    f"*Se intentó {MAX_RETRIES} veces sin éxito.*\n\n"
+			    f"*Recomendaciones:*\n"
+			    f"• Espera unos minutos e intenta de nuevo\n"
+			    f"• Verifica manualmente en la app de HIFE\n"
+			    f"• El bot seguirá intentando automáticamente\n\n"
+			    f"Si el problema persiste, puede ser un problema temporal del servidor."
+			)
+		elif error_type == 'timeout':
+			error_message = (f"⏱️ *Timeout en la solicitud*\n\n"
+			                 f"📅 Fecha: {date_formatted}\n"
+			                 f"⏰ Hora solicitada: {t_time}\n"
+			                 f"🎫 Tipo: {t_type.capitalize()}\n\n"
+			                 f"La solicitud tardó demasiado en responder.\n\n"
+			                 f"*Posibles causas:*\n"
+			                 f"• Problemas de conexión\n"
+			                 f"• El servidor está sobrecargado\n\n"
+			                 f"Por favor, intenta de nuevo en unos momentos.")
+		elif error_type == 'connection_error':
+			error_message = (
+			    f"🔌 *Error de conexión*\n\n"
+			    f"📅 Fecha: {date_formatted}\n"
+			    f"⏰ Hora solicitada: {t_time}\n"
+			    f"🎫 Tipo: {t_type.capitalize()}\n\n"
+			    f"No se pudo conectar con el servidor de HIFE.\n\n"
+			    f"*Posibles causas:*\n"
+			    f"• Problemas de red\n"
+			    f"• El servidor está temporalmente fuera de línea\n\n"
+			    f"Verifica tu conexión e intenta de nuevo.")
+		else:
+			# Generic error
+			error_message = (
+			    f"❌ *Error al buscar viaje*\n\n"
+			    f"📅 Fecha: {date_formatted}\n"
+			    f"⏰ Hora solicitada: {t_time}\n"
+			    f"🎫 Tipo: {t_type.capitalize()}\n\n"
+			    f"Ocurrió un error inesperado al buscar el viaje.\n\n"
+			    f"Por favor, intenta de nuevo más tarde.")
+
+		await context.bot.send_message(Config.TELEGRAM_USER_ID,
+		                               text=error_message,
+		                               parse_mode='Markdown')
+	elif schedule_id:
+		# Valid trip ID found
 		success = automator.buy_ticket(schedule_id, t_date, t_type)
 		if success:
 			success_message = (f"✅ *¡Billete comprado con éxito!*\n\n"
@@ -344,6 +463,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 			                               text=error_message,
 			                               parse_mode='Markdown')
 	else:
+		# schedule_id is None - trip not found
 		not_found_message = (
 		    f"❌ *Horario no encontrado*\n\n"
 		    f"📅 Fecha: {date_formatted}\n"
@@ -353,7 +473,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 		    f"*Posibles causas:*\n"
 		    f"• El horario no existe para esta fecha\n"
 		    f"• Cambios en los horarios de la línea\n"
-		    f"• Problema temporal con la API\n\n"
+		    f"• El viaje ya no está disponible\n\n"
 		    f"Por favor, verifica los horarios disponibles.")
 		await context.bot.send_message(Config.TELEGRAM_USER_ID,
 		                               text=not_found_message,
