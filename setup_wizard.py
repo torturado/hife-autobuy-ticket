@@ -3,6 +3,7 @@ import re
 import requests
 from getpass import getpass
 from rich.console import Console
+from auth import get_hife_token
 from rich.panel import Panel
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -104,97 +105,17 @@ def get_jwt_token():
 
 	password = questionary.password("Contraseña de HIFE:").ask()
 
-	# Get client_secret from environment variable or prompt user
+	# Get client_secret from environment variable
 	client_secret = os.getenv('HIFE_CLIENT_SECRET')
-	if not client_secret:
-		console.print(
-		    Panel(
-		        "[yellow]⚠️ HIFE_CLIENT_SECRET no encontrado en variables de entorno.[/yellow]\n"
-		        "Por favor, introduce el client_secret de HIFE.",
-		        border_style="yellow",
-		        title="⚠️ Advertencia"))
-		client_secret = questionary.password("Client Secret de HIFE:").ask()
-		if not client_secret:
-			console.print("[red]❌ Error: Client Secret es requerido[/red]")
-			return None
-
-	headers = {
-	    'accept':
-	    'application/json; charset=utf-8',
-	    'app-version':
-	    '2.0.8',
-	    'content-type':
-	    'application/json; charset=utf-8',
-	    'user-agent':
-	    'Dalvik/2.1.0 (Linux; U; Android 12; SM-S916U Build/9643478.0)'
-	}
-
-	data = {
-	    'client_id': 2,
-	    'client_secret': client_secret,
-	    'grant_type': 'password',
-	    'username': email,
-	    'password': password
-	}
 
 	with console.status("[cyan]Obteniendo token de acceso...", spinner="dots"):
-		try:
-			response = requests.post('https://middleware.hife.es/oauth/token',
-			                         headers=headers,
-			                         json=data,
-			                         timeout=10)
-			response.raise_for_status()
-			result = response.json()
-
-			access_token = result.get('access_token')
-			if not access_token:
-				console.print(
-				    "[red]❌ Error: No se recibió el token de acceso[/red]")
-				return None
-
-			refresh_token = result.get('refresh_token')
-			expires_in = result.get('expires_in', 0)
-			days = expires_in // 86400 if expires_in > 0 else 0
-
-			console.print(
-			    f"[green]✅ Token obtenido correctamente (expira en {days} días)[/green]"
-			)
-
-			return f'Bearer {access_token}'
-
-		except requests.exceptions.Timeout:
-			error_panel = Panel(
-			    "[red]Error: Timeout al conectar con el servidor de HIFE[/red]\n"
-			    "Por favor, verifica tu conexión a internet e intenta de nuevo.",
-			    title="[red]❌ Error de Timeout[/red]",
-			    border_style="red")
-			console.print(error_panel)
-			return None
-		except requests.exceptions.RequestException as e:
-			error_panel = Panel(
-			    f"[red]Error de red al obtener token:[/red]\n{str(e)}",
-			    title="[red]❌ Error de Red[/red]",
-			    border_style="red")
-			console.print(error_panel)
-			return None
-		except requests.exceptions.HTTPError as e:
-			if e.response.status_code == 401:
-				console.print("[red]❌ Error: Credenciales incorrectas[/red]")
-			else:
-				error_panel = Panel(
-				    f"[red]Error HTTP {e.response.status_code}[/red]\n"
-				    f"Mensaje: {e.response.text[:200] if hasattr(e.response, 'text') else 'Error desconocido'}",
-				    title="[red]❌ Error[/red]",
-				    border_style="red")
-				console.print(error_panel)
-			return None
-		except Exception as e:
-			error_panel = Panel(
-			    f"[red]Error al obtener token:[/red]\n{str(e)}",
-			    title="[red]❌ Error[/red]",
-			    border_style="red")
-			console.print(error_panel)
-			return None
+		token = get_hife_token(email, password, client_secret)
+		if token:
+			console.print("[green]✅ Token obtenido correctamente[/green]")
+			return token, email, password, client_secret
+		else:
+			console.print("[red]❌ Error al obtener el token[/red]")
+			return None, None, None, None
 
 
 def get_stops_from_api(auth_token):
@@ -527,8 +448,13 @@ TELEGRAM_USER_ID={config['telegram_user_id']}
 # URL base de la API de HIFE (normalmente no cambiar)
 HIFE_API_URL=https://middleware.hife.es/api
 
-# Token JWT de autenticación (obtener de los logs de la app móvil)
+# Token JWT de autenticación
 HIFE_AUTH_TOKEN={config.get('hife_auth_token', '')}
+
+# Credenciales para renovación automática
+HIFE_EMAIL={config.get('hife_email', '')}
+HIFE_PASSWORD={config.get('hife_password', '')}
+HIFE_CLIENT_SECRET={config.get('hife_client_secret', '')}
 
 # Client ID de HIFE (normalmente 33798)
 HIFE_CLIENT_ID=33798
@@ -695,8 +621,8 @@ def main():
 	config['telegram_token'], config['telegram_user_id'] = get_telegram_info()
 
 	# 2. Obtener token JWT de HIFE
-	config['hife_auth_token'] = get_jwt_token()
-	if not config['hife_auth_token']:
+	token, email, password, secret = get_jwt_token()
+	if not token:
 		console.print()
 		console.print(
 		    Panel(
@@ -704,6 +630,11 @@ def main():
 		        border_style="red",
 		        title="❌ Error"))
 		return
+
+	config['hife_auth_token'] = token
+	config['hife_email'] = email
+	config['hife_password'] = password
+	config['hife_client_secret'] = secret
 
 	# 3. Obtener paradas de la API
 	stops_data = get_stops_from_api(config['hife_auth_token'])

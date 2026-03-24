@@ -29,6 +29,9 @@ class Config:
 	HIFE_API_URL: str = os.getenv('HIFE_API_URL',
 	                              'https://middleware.hife.es/api')
 	HIFE_AUTH_TOKEN: str = os.getenv('HIFE_AUTH_TOKEN', '')
+	HIFE_EMAIL: str = os.getenv('HIFE_EMAIL', '')
+	HIFE_PASSWORD: str = os.getenv('HIFE_PASSWORD', '')
+	HIFE_CLIENT_SECRET: str = os.getenv('HIFE_CLIENT_SECRET', '')
 	HIFE_CLIENT_ID: Optional[str] = os.getenv('HIFE_CLIENT_ID', '33798')
 	HIFE_CLIENT_ID_VALIDATED: Optional[int] = None  # Set during validation
 	HIFE_APP_VERSION: str = os.getenv('HIFE_APP_VERSION', '2.0.8')
@@ -158,8 +161,8 @@ class Config:
 			errors.append("TELEGRAM_TOKEN no configurado")
 		if not cls.TELEGRAM_USER_ID:
 			errors.append("TELEGRAM_USER_ID no configurado")
-		if not cls.HIFE_AUTH_TOKEN:
-			errors.append("HIFE_AUTH_TOKEN no configurado")
+		if not cls.HIFE_AUTH_TOKEN and not (cls.HIFE_EMAIL and cls.HIFE_PASSWORD):
+			errors.append("HIFE_AUTH_TOKEN o credenciales de email/password no configurados")
 		if not cls.ORIGIN_ID:
 			errors.append("ORIGIN_ID no configurado")
 		if not cls.ORIGIN_STOP_CODE:
