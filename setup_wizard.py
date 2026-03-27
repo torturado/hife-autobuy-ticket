@@ -462,6 +462,9 @@ HIFE_CLIENT_ID=33798
 # Versión de la app (normalmente 2.0.8)
 HIFE_APP_VERSION=2.0.8
 
+# Código de tarifa opcional para forzar el goingPrice
+HIFE_GOING_RATE={config.get('hife_going_rate', '')}
+
 # ============================================
 # CONFIGURACIÓN DE ESTACIONES
 # ============================================
@@ -596,6 +599,8 @@ def show_summary(config):
 		summary_table.add_row("Bono", f"{bonus_name} (ID: {bonus_id})")
 	else:
 		summary_table.add_row("Bono ID", bonus_id)
+	if config.get('hife_going_rate'):
+		summary_table.add_row("Tarifa forzada", config['hife_going_rate'])
 	summary_table.add_row(
 	    "Antelación Notificación",
 	    f"{config['schedules'].get('notification_advance', '75')} minutos")
@@ -824,6 +829,11 @@ def main():
 			    "ID del bono a utilizar (default: 19 para MITMA Joven):",
 			    default="19").ask()
 			config['bonus_id'] = bonus_id if bonus_id else "19"
+
+	config['hife_going_rate'] = questionary.text(
+	    "Código de tarifa goingPrice (opcional, Enter para detectar automáticamente):",
+	    validate=lambda text: True if not text or text.isdigit(
+	    ) else "Debe ser numérico").ask() or ""
 
 	# Los trip_ids no se obtienen automáticamente, el usuario puede configurarlos después si es necesario
 	config['trip_ids'] = {}

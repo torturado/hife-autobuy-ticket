@@ -35,6 +35,7 @@ class Config:
 	HIFE_CLIENT_ID: Optional[str] = os.getenv('HIFE_CLIENT_ID', '33798')
 	HIFE_CLIENT_ID_VALIDATED: Optional[int] = None  # Set during validation
 	HIFE_APP_VERSION: str = os.getenv('HIFE_APP_VERSION', '2.0.8')
+	HIFE_GOING_RATE: str = os.getenv('HIFE_GOING_RATE', '').strip()
 
 	# Estaciones
 	ORIGIN_ID: str = os.getenv('ORIGIN_ID', '')
